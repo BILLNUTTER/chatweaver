@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { cleanupExpiredMessages } from "./lib/mongo";
 
 const rawPort = process.env["PORT"];
 
@@ -14,6 +15,12 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+void cleanupExpiredMessages();
+const cleanupTimer = setInterval(() => {
+  void cleanupExpiredMessages();
+}, 60 * 60 * 1000);
+cleanupTimer.unref();
 
 app.listen(port, (err) => {
   if (err) {

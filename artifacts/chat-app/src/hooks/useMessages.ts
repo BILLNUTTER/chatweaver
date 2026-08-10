@@ -2,6 +2,16 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import type { DBMessage, DBUser } from "@/lib/database.types";
+import {
+  createMessage,
+  getConversations,
+  getMessages,
+  getStorageMode,
+  getUsers,
+  updateConversation,
+  updateMessage,
+  updateUser,
+} from "@/lib/storage";
 
 export interface MessageWithSender extends DBMessage {
   sender: DBUser | null;
@@ -25,13 +35,13 @@ export function useMessages(conversationId: string | null) {
     const replyIds = rawMessages.filter(m => m.reply_to).map(m => m.reply_to as string);
     const allIds = [...new Set([...senderIds, ...replyIds])];
 
-    const { data: users } = await supabase.from("users").select("*").in("id", allIds);
-    const userMap = new Map(users?.map(u => [u.id, u]) ?? []);
+    const users = allIds.length > 0 ? await getUsers({ ids: allIds }) : [];
+    const userMap = new Map(users.map(u => [u.id, u]));
 
     let replyMessages: DBMessage[] = [];
     if (replyIds.length > 0) {
-      const { data } = await supabase.from("messages").select("*").in("id", replyIds);
-      replyMessages = data ?? [];
+      const allMessages = await getMessages(conversationId ?? "");
+      replyMessages = allMessages.filter(message => replyIds.includes(message.id));
     }
     const replyMap = new Map(replyMessages.map(m => [m.id, m]));
 
@@ -48,13 +58,14 @@ export function useMessages(conversationId: string | null) {
     if (!conversationId) return;
     setLoading(true);
 
-    const { data } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true });
-
-    if (!data) { setLoading(false); return; }
+    let data: DBMessage[];
+    try {
+      data = await getMessages(conversationId);
+    } catch {
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
 
     const withSenders = await buildWithSenders(data);
     setMessages(withSenders);
@@ -67,17 +78,11 @@ export function useMessages(conversationId: string | null) {
         // Update each message's read_by individually (can't batch different arrays)
         await Promise.all(
           unread.map(msg =>
-            supabase
-              .from("messages")
-              .update({ read_by: [...(msg.read_by ?? []), user.id] })
-              .eq("id", msg.id)
+            updateMessage(msg.id, { read_by: [...(msg.read_by ?? []), user.id] })
           )
         );
       }
-      await supabase
-        .from("conversations")
-        .update({ unread_by: [] })
-        .eq("id", conversationId);
+      await updateConversation(conversationId, { unread_by: [] });
     }
   };
 
@@ -85,87 +90,87 @@ export function useMessages(conversationId: string | null) {
     if (!conversationId) { setMessages([]); return; }
     fetchMessages();
 
-    const uid = crypto.randomUUID();
+    let cancelled = false;
+    let messageTimer: number | undefined;
+    let msgChannel: ReturnType<typeof supabase.channel> | undefined;
+    let typingChannel: ReturnType<typeof supabase.channel> | undefined;
 
-    // Real-time message subscription
-    const msgChannel = supabase
-      .channel(`msgs-${conversationId}-${uid}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "messages",
-        filter: `conversation_id=eq.${conversationId}`,
-      }, async (payload) => {
-        const newMsg = payload.new as DBMessage;
-        const built = await buildWithSenders([newMsg]);
-        setMessages(prev => {
-          // Replace matching optimistic message (same sender + content, sent within last 10s)
-          const optimisticIdx = prev.findIndex(m =>
-            m._optimistic &&
-            m.sender_id === newMsg.sender_id &&
-            m.content === newMsg.content &&
-            Math.abs(new Date(m.created_at).getTime() - new Date(newMsg.created_at).getTime()) < 10000
-          );
-          if (optimisticIdx !== -1) {
-            const next = [...prev];
-            next[optimisticIdx] = built[0];
-            return next;
-          }
-          // Avoid real duplicates
-          if (prev.some(m => m.id === newMsg.id)) return prev;
-          return [...prev, ...built];
-        });
-        // Mark as read if window is open — must await
-        if (user && newMsg.sender_id !== user.id) {
-          await supabase
-            .from("messages")
-            .update({ read_by: [...(newMsg.read_by ?? []), user.id] })
-            .eq("id", newMsg.id);
+    const attachRealtime = async () => {
+      const mode = await getStorageMode();
+      if (cancelled) return;
 
-          // Auto-add sender to contacts if not already there
-          const { data: meData } = await supabase.from("users").select("friends").eq("id", user.id).single();
-          const friends: string[] = meData?.friends ?? [];
-          if (!friends.includes(newMsg.sender_id)) {
-            await supabase.from("users").update({ friends: [...friends, newMsg.sender_id] }).eq("id", user.id);
-          }
-        }
-      })
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "messages",
-        filter: `conversation_id=eq.${conversationId}`,
-      }, (payload) => {
-        const updated = payload.new as DBMessage;
-        setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated, _optimistic: false } : m));
-      })
-      .subscribe();
+      if (mode === "mongodb") {
+        messageTimer = window.setInterval(() => void fetchMessages(), 4000);
+        return;
+      }
 
-    // Typing via broadcast
-    const typingChannel = supabase
-      .channel(`typing-bc-${conversationId}-${uid}`)
-      .on("broadcast", { event: "typing" }, async ({ payload }) => {
-        if (!payload?.userId || payload.userId === user?.id) return;
-        const { data: typingUser } = await supabase.from("users").select("*").eq("id", payload.userId).single();
-        if (!typingUser) return;
+      if (!supabase) return;
+      const uid = crypto.randomUUID();
+      msgChannel = supabase
+        .channel(`msgs-${conversationId}-${uid}`)
+        .on("postgres_changes", {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        }, async (payload) => {
+          const newMsg = payload.new as DBMessage;
+          const built = await buildWithSenders([newMsg]);
+          setMessages(prev => {
+            const optimisticIdx = prev.findIndex(m =>
+              m._optimistic &&
+              m.sender_id === newMsg.sender_id &&
+              m.content === newMsg.content &&
+              Math.abs(new Date(m.created_at).getTime() - new Date(newMsg.created_at).getTime()) < 10000
+            );
+            if (optimisticIdx !== -1) {
+              const next = [...prev];
+              next[optimisticIdx] = built[0];
+              return next;
+            }
+            if (prev.some(m => m.id === newMsg.id)) return prev;
+            return [...prev, ...built];
+          });
+        })
+        .on("postgres_changes", {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        }, (payload) => {
+          const updated = payload.new as DBMessage;
+          setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated, _optimistic: false } : m));
+        })
+        .subscribe();
 
-        if (!typingUsers.has(conversationId)) typingUsers.set(conversationId, new Map());
-        const convTyping = typingUsers.get(conversationId)!;
-        convTyping.set(payload.userId, { user: typingUser, expiry: Date.now() + 4000 });
-        setTypingList([...convTyping.values()].filter(t => t.expiry > Date.now()).map(t => t.user));
+      typingChannel = supabase
+        .channel(`typing-bc-${conversationId}-${uid}`)
+        .on("broadcast", { event: "typing" }, async ({ payload }) => {
+          if (!payload?.userId || payload.userId === user?.id) return;
+          const typingUser = (await getUsers({ ids: [payload.userId] }))[0];
+          if (!typingUser) return;
 
-        setTimeout(() => {
-          convTyping.delete(payload.userId);
+          if (!typingUsers.has(conversationId)) typingUsers.set(conversationId, new Map());
+          const convTyping = typingUsers.get(conversationId)!;
+          convTyping.set(payload.userId, { user: typingUser, expiry: Date.now() + 4000 });
           setTypingList([...convTyping.values()].filter(t => t.expiry > Date.now()).map(t => t.user));
-        }, 4000);
-      })
-      .subscribe();
 
-    typingChannelRef.current = typingChannel;
+          setTimeout(() => {
+            convTyping.delete(payload.userId);
+            setTypingList([...convTyping.values()].filter(t => t.expiry > Date.now()).map(t => t.user));
+          }, 4000);
+        })
+        .subscribe();
+
+      typingChannelRef.current = typingChannel;
+    };
+    void attachRealtime();
 
     return () => {
-      supabase.removeChannel(msgChannel);
-      supabase.removeChannel(typingChannel);
+      cancelled = true;
+      if (messageTimer) window.clearInterval(messageTimer);
+      if (msgChannel) void supabase?.removeChannel(msgChannel);
+      if (typingChannel) void supabase?.removeChannel(typingChannel);
       typingUsers.delete(conversationId);
       setTypingList([]);
     };
@@ -196,43 +201,43 @@ export function useMessages(conversationId: string | null) {
     setMessages(prev => [...prev, optimistic]);
 
     // 2. Persist to DB
-    const { error: insertError } = await supabase.from("messages").insert({
+    let inserted: DBMessage;
+    try {
+      inserted = await createMessage({
       conversation_id: conversationId,
       sender_id: user.id,
       content: content.trim(),
       reply_to: replyToId ?? null,
       read_by: [user.id],
-    });
-
-    if (insertError) {
+      });
+    } catch {
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      console.error("Failed to send message:", insertError.message);
       return;
     }
+    setMessages(prev => prev.map(message => message.id === tempId ? {
+      ...message,
+      ...inserted,
+      sender: dbUser,
+      _optimistic: false,
+    } : message));
 
-    // Fetch other participants to mark them as having unread messages
-    const { data: convData } = await supabase
-      .from("conversations")
-      .select("participants")
-      .eq("id", conversationId)
-      .single();
+    const conv = (await getConversations(user.id)).find(item => item.id === conversationId);
+    const otherParticipants = (conv?.participants ?? []).filter((id: string) => id !== user.id);
 
-    const otherParticipants = (convData?.participants ?? []).filter((id: string) => id !== user.id);
-
-    await supabase.from("conversations").update({
+    await updateConversation(conversationId, {
       last_message: content.trim().slice(0, 100),
       last_message_at: new Date().toISOString(),
       unread_by: otherParticipants,
-    }).eq("id", conversationId);
+    });
 
     stopTyping();
   };
 
   const deleteMessage = async (messageId: string) => {
-    await supabase.from("messages").update({
+    await updateMessage(messageId, {
       content: null,
       is_edited: true,
-    }).eq("id", messageId);
+    });
   };
 
   const startTyping = async () => {

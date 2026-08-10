@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import type { DBUser } from "@/lib/database.types";
+import { clearMongoToken, deleteUser, getMongoToken, getStorageMode, getUser, mongoMe, updateUser } from "@/lib/storage";
 
 interface AuthContextType {
   session: Session | null;
@@ -22,7 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchDbUser = async (userId: string) => {
-    const { data } = await supabase.from("users").select("*").eq("id", userId).single();
+    const data = await getUser(userId);
     setDbUser(data ?? null);
     return data ?? null;
   };
@@ -35,24 +36,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Safety valve — never stay on loading screen more than 6 s
     const safetyTimer = setTimeout(() => setLoading(false), 6000);
 
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error || !session) {
-        // No valid session — go straight to login, no network call needed
+    const initialize = async () => {
+      try {
+        const storageMode = await getStorageMode();
+        if (storageMode === "mongodb") {
+          const token = getMongoToken();
+          if (!token) {
+            return;
+          }
+          try {
+            const profile = await mongoMe(token);
+            const mongoUser = profile as unknown as User;
+            setSession({ access_token: token, user: mongoUser } as unknown as Session);
+            setUser(mongoUser);
+            setDbUser(profile);
+          } catch {
+            clearMongoToken();
+            setSession(null);
+            setUser(null);
+            setDbUser(null);
+          }
+          clearTimeout(safetyTimer);
+          setLoading(false);
+          return;
+        }
+
+        if (!supabase) {
+          setSession(null);
+          setUser(null);
+          setDbUser(null);
+          clearTimeout(safetyTimer);
+          setLoading(false);
+          return;
+        }
+
+        const sessionResult = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<null>(resolve => setTimeout(() => resolve(null), 1800)),
+        ]);
+        const session = sessionResult?.data.session ?? null;
+        const error = sessionResult?.error;
+        if (error || !session) {
+          setSession(null);
+          setUser(null);
+          setDbUser(null);
+          clearTimeout(safetyTimer);
+          setLoading(false);
+          return;
+        }
+        setSession(session);
+        setUser(session.user);
+        await Promise.race([
+          fetchDbUser(session.user.id),
+          new Promise<null>(resolve => setTimeout(() => resolve(null), 1800)),
+        ]);
+      } catch {
         setSession(null);
         setUser(null);
         setDbUser(null);
+      } finally {
         clearTimeout(safetyTimer);
         setLoading(false);
-        return;
       }
-      setSession(session);
-      setUser(session.user);
-      fetchDbUser(session.user.id).finally(() => {
-        clearTimeout(safetyTimer);
-        setLoading(false);
-      });
-    });
+    };
+    void initialize();
 
+    if (!supabase) return () => clearTimeout(safetyTimer);
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       // TOKEN_REFRESHED failure or explicit sign-out → clear everything
       if (event === "SIGNED_OUT" || !session) {
@@ -82,18 +131,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user) return;
     // Must await — Supabase JS v2 lazy promises never fire without await/.then()
-    supabase.from("users").update({ last_seen: new Date().toISOString() }).eq("id", user.id).then();
+    void updateUser(user.id, { last_seen: new Date().toISOString() });
 
     const handleUnload = () => {
-      supabase.from("users").update({ last_seen: new Date().toISOString() }).eq("id", user.id).then();
+      void updateUser(user.id, { last_seen: new Date().toISOString() });
     };
     window.addEventListener("beforeunload", handleUnload);
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, [user]);
 
   const signOut = async () => {
+    clearMongoToken();
     // Best-effort server invalidation — ignore errors
-    try { await supabase.auth.signOut(); } catch { /* ignore */ }
+    try { await supabase?.auth.signOut(); } catch { /* ignore */ }
     // Force-clear local state so the UI always responds
     setSession(null);
     setUser(null);
@@ -102,29 +152,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteAccount = async (): Promise<{ error?: string }> => {
     if (!user) return { error: "Not authenticated" };
-    // Remove user from all conversations (update participants arrays)
-    const { data: convs } = await supabase
-      .from("conversations")
-      .select("id, participants")
-      .contains("participants", [user.id]);
-
-    if (convs) {
-      for (const conv of convs) {
-        const updated = conv.participants.filter((id: string) => id !== user.id);
-        if (updated.length === 0) {
-          await supabase.from("conversations").delete().eq("id", conv.id);
-        } else {
-          await supabase.from("conversations").update({ participants: updated }).eq("id", conv.id);
-        }
-      }
+    try {
+      await deleteUser(user.id);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Could not delete account" };
     }
 
-    // Delete user row
-    const { error: delErr } = await supabase.from("users").delete().eq("id", user.id);
-    if (delErr) return { error: delErr.message };
-
     // Sign out (Supabase Auth user deletion requires service role — sign out is sufficient for client)
-    await supabase.auth.signOut();
+    try { await supabase?.auth.signOut(); } catch { /* local state is cleared below */ }
+    setSession(null);
+    setUser(null);
+    setDbUser(null);
     return {};
   };
 

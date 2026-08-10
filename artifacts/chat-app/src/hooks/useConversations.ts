@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import type { DBUser, DBConversation } from "@/lib/database.types";
+import { getConversations, getMessages, getStorageMode, getUsers, updateConversation, updateMessage } from "@/lib/storage";
 
 export interface ConversationWithDetails extends DBConversation {
   other_user: DBUser | null;
@@ -17,31 +17,30 @@ export function useConversations() {
   const fetchConversations = async () => {
     if (!user) return;
 
-    const { data: convs, error } = await supabase
-      .from("conversations")
-      .select("*")
-      .contains("participants", [user.id])
-      .order("last_message_at", { ascending: false, nullsFirst: false });
-
-    if (error || !convs) { setLoading(false); return; }
+    let convs: DBConversation[];
+    try {
+      convs = await getConversations(user.id);
+    } catch {
+      setConversations([]);
+      setLoading(false);
+      return;
+    }
 
     const allIds = [...new Set(convs.flatMap(c => c.participants))];
-    const { data: users } = await supabase.from("users").select("*").in("id", allIds);
-    const userMap = new Map(users?.map(u => [u.id, u]) ?? []);
+    const users = await getUsers({ ids: allIds });
+    const userMap = new Map(users.map(u => [u.id, u]));
 
     // Count unread messages: sent by others, not yet read by me
     const convIds = convs.map(c => c.id);
     const unreadMap = new Map<string, number>();
     if (convIds.length > 0) {
-      const { data: unreadRows } = await supabase
-        .from("messages")
-        .select("conversation_id")
-        .in("conversation_id", convIds)
-        .neq("sender_id", user.id)
-        .not("read_by", "cs", `{${user.id}}`);
-
-      for (const row of unreadRows ?? []) {
-        unreadMap.set(row.conversation_id, (unreadMap.get(row.conversation_id) ?? 0) + 1);
+      const messageLists = await Promise.all(convIds.map(id => getMessages(id)));
+      for (const messages of messageLists) {
+        for (const row of messages) {
+          if (row.sender_id !== user.id && !row.read_by?.includes(user.id)) {
+            unreadMap.set(row.conversation_id, (unreadMap.get(row.conversation_id) ?? 0) + 1);
+          }
+        }
       }
     }
 
@@ -63,24 +62,25 @@ export function useConversations() {
       prev.map(c => c.id === conversationId ? { ...c, unread_count: 0 } : c)
     );
     if (user) {
-      await supabase
-        .from("conversations")
-        .update({ unread_by: [] })
-        .eq("id", conversationId);
+      await updateConversation(conversationId, { unread_by: [] });
     }
   };
 
   useEffect(() => {
-    fetchConversations();
-
-    const channelName = `convs-${user?.id}-${crypto.randomUUID()}`;
-    const channel = supabase
-      .channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => fetchConversations())
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => fetchConversations())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    void fetchConversations();
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    void getStorageMode().then(mode => {
+      if (cancelled) return;
+      if (mode === "mongodb") {
+        const timer = window.setInterval(() => void fetchConversations(), 4000);
+        cleanup = () => window.clearInterval(timer);
+      }
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, [user]);
 
   return { conversations, loading, refetch: fetchConversations, markConversationRead };

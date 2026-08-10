@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { MessageCircle, Eye, EyeOff } from "lucide-react";
+import { createUser, getStorageMode, getUsers, mongoLogin, mongoRegister, setMongoToken } from "@/lib/storage";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -42,22 +43,46 @@ export default function AuthPage() {
 
   const handleLogin = async (data: LoginForm) => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: data.email, password: data.password });
-    setLoading(false);
-    if (error) toast({ title: "Login failed", description: error.message, variant: "destructive" });
+    try {
+      if (await getStorageMode() === "mongodb") {
+        const result = await mongoLogin(data.email, data.password);
+        setMongoToken(result.token);
+        window.location.reload();
+        return;
+      }
+      const { error } = await supabase.auth.signInWithPassword({ email: data.email, password: data.password });
+      if (error) toast({ title: "Login failed", description: error.message, variant: "destructive" });
+    } catch (error) {
+      toast({ title: "Login failed", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRegister = async (data: RegisterForm) => {
     setLoading(true);
     try {
+      if (await getStorageMode() === "mongodb") {
+        const result = await mongoRegister({
+          name: data.name,
+          username: data.username,
+          email: data.email,
+          phone: data.phone,
+          password: data.password,
+        });
+        setMongoToken(result.token);
+        window.location.reload();
+        return;
+      }
       // Check uniqueness
-      const { data: existing } = await supabase
-        .from("users")
-        .select("id")
-        .or(`email.eq.${data.email},phone.eq.${data.phone},username.eq.${data.username}`)
-        .limit(1);
+      const existing = await getUsers({ query: data.email });
+      const matchingExisting = existing.some(user =>
+        user.email.toLowerCase() === data.email.toLowerCase() ||
+        user.phone === data.phone ||
+        user.username.toLowerCase() === data.username.toLowerCase(),
+      );
 
-      if (existing?.length) {
+      if (matchingExisting) {
         toast({ title: "Account exists", description: "Email, phone, or username already taken.", variant: "destructive" });
         return;
       }
@@ -94,7 +119,9 @@ export default function AuthPage() {
       }
 
       // Insert profile row
-      const { error: userError } = await supabase.from("users").insert({
+      let userError: Error | null = null;
+      try {
+        await createUser({
         id: authData.user.id,
         name: data.name,
         username: data.username,
@@ -105,7 +132,10 @@ export default function AuthPage() {
         friends: [],
         friend_requests: [],
         sent_requests: [],
-      });
+        });
+      } catch (error) {
+        userError = error instanceof Error ? error : new Error("Could not create profile");
+      }
 
       if (userError) {
         toast({ title: "Profile setup error", description: userError.message, variant: "destructive" });
