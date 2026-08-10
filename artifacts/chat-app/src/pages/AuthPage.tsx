@@ -74,24 +74,29 @@ export default function AuthPage() {
         window.location.reload();
         return;
       }
-      // Check uniqueness
-      const existing = await getUsers({ query: data.email });
-      const matchingExisting = existing.some(user =>
-        user.email.toLowerCase() === data.email.toLowerCase() ||
-        user.phone === data.phone ||
-        user.username.toLowerCase() === data.username.toLowerCase(),
-      );
-
-      if (matchingExisting) {
-        toast({ title: "Account exists", description: "Email, phone, or username already taken.", variant: "destructive" });
-        return;
+      // This is only an early UX check. Auth remains the source of truth,
+      // so a temporarily unavailable profile table must not block signup.
+      try {
+        const existing = await getUsers({ query: data.email });
+        const matchingExisting = existing.some(user =>
+          user.email.toLowerCase() === data.email.toLowerCase() ||
+          user.phone === data.phone ||
+          user.username.toLowerCase() === data.username.toLowerCase(),
+        );
+        if (matchingExisting) {
+          toast({ title: "Account exists", description: "Email, phone, or username already taken.", variant: "destructive" });
+          return;
+        }
+      } catch {
+        // Continue to auth signup; the profile lookup is not authoritative.
       }
 
       // Create Supabase auth user
-      const { data: authData, error } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-      });
+      const authResult = await Promise.race([
+        supabase.auth.signUp({ email: data.email, password: data.password }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("The authentication service timed out. Please try again.")), 10000)),
+      ]);
+      const { data: authData, error } = authResult;
 
       if (error) {
         let description = error.message;
@@ -99,6 +104,8 @@ export default function AuthPage() {
           description = "Too many attempts. Wait a few minutes, or go to Supabase → Authentication → Settings and disable email confirmation.";
         } else if (error.message.includes("already registered")) {
           description = "This email is already registered. Try signing in instead.";
+        } else if (error.message.toLowerCase().includes("database error")) {
+          description = "The current authentication database is unavailable. MongoDB fallback is configured, but its Atlas connection must be restored before it can take over.";
         }
         toast({ title: "Registration failed", description, variant: "destructive" });
         return;
