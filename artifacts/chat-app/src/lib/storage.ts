@@ -7,7 +7,7 @@ const MONGO_TOKEN_KEY = "chatweaver_mongo_token";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 1800);
+  const timeout = window.setTimeout(() => controller.abort(), 15_000);
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
@@ -20,7 +20,11 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({})) as { error?: string };
-    throw new Error(body.error ?? `MongoDB request failed (${response.status})`);
+    if (body.error) throw new Error(body.error);
+    if (response.status === 404) {
+      throw new Error("MongoDB API is not deployed. Redeploy Vercel after adding the /api serverless function.");
+    }
+    throw new Error(`MongoDB API request failed (${response.status}). Check Vercel function logs and production environment variables.`);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;

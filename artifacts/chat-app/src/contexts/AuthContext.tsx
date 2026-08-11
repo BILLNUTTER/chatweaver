@@ -37,7 +37,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initialize = async () => {
       try {
-        await getStorageMode();
         const token = getMongoToken();
         if (!token) {
           setSession(null);
