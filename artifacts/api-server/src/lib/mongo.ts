@@ -40,8 +40,9 @@ export async function getMongoDb(): Promise<Db | null> {
   return databasePromise;
 }
 
-export async function getStorageMode(): Promise<"mongodb" | "supabase"> {
-  return (await getMongoDb()) ? "mongodb" : "supabase";
+export async function getStorageMode(): Promise<"mongodb"> {
+  await getMongoDb();
+  return "mongodb";
 }
 
 export async function cleanupExpiredMessages(): Promise<void> {

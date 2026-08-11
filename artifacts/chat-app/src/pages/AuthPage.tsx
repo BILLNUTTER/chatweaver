@@ -2,11 +2,9 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { MessageCircle, Eye, EyeOff } from "lucide-react";
-import { createUser, getStorageMode, getUsers, mongoLogin, mongoRegister, setMongoToken } from "@/lib/storage";
+import { mongoLogin, mongoRegister, setMongoToken } from "@/lib/storage";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email"),
@@ -30,8 +28,6 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { refreshUser } = useAuth();
-
   const loginForm = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -44,14 +40,9 @@ export default function AuthPage() {
   const handleLogin = async (data: LoginForm) => {
     setLoading(true);
     try {
-      if (await getStorageMode() === "mongodb") {
-        const result = await mongoLogin(data.email, data.password);
-        setMongoToken(result.token);
-        window.location.reload();
-        return;
-      }
-      const { error } = await supabase.auth.signInWithPassword({ email: data.email, password: data.password });
-      if (error) toast({ title: "Login failed", description: error.message, variant: "destructive" });
+      const result = await mongoLogin(data.email, data.password);
+      setMongoToken(result.token);
+      window.location.reload();
     } catch (error) {
       toast({ title: "Login failed", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
     } finally {
@@ -62,94 +53,16 @@ export default function AuthPage() {
   const handleRegister = async (data: RegisterForm) => {
     setLoading(true);
     try {
-      if (await getStorageMode() === "mongodb") {
-        const result = await mongoRegister({
-          name: data.name,
-          username: data.username,
-          email: data.email,
-          phone: data.phone,
-          password: data.password,
-        });
-        setMongoToken(result.token);
-        window.location.reload();
-        return;
-      }
-      // This is only an early UX check. Auth remains the source of truth,
-      // so a temporarily unavailable profile table must not block signup.
-      try {
-        const existing = await getUsers({ query: data.email });
-        const matchingExisting = existing.some(user =>
-          user.email.toLowerCase() === data.email.toLowerCase() ||
-          user.phone === data.phone ||
-          user.username.toLowerCase() === data.username.toLowerCase(),
-        );
-        if (matchingExisting) {
-          toast({ title: "Account exists", description: "Email, phone, or username already taken.", variant: "destructive" });
-          return;
-        }
-      } catch {
-        // Continue to auth signup; the profile lookup is not authoritative.
-      }
-
-      // Create Supabase auth user
-      const authResult = await Promise.race([
-        supabase.auth.signUp({ email: data.email, password: data.password }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("The authentication service timed out. Please try again.")), 10000)),
-      ]);
-      const { data: authData, error } = authResult;
-
-      if (error) {
-        let description = error.message;
-        if (error.message.includes("rate limit") || error.message.includes("429")) {
-          description = "Too many attempts. Wait a few minutes, or go to Supabase → Authentication → Settings and disable email confirmation.";
-        } else if (error.message.includes("already registered")) {
-          description = "This email is already registered. Try signing in instead.";
-        } else if (error.message.toLowerCase().includes("database error")) {
-          description = "The current authentication database is unavailable. MongoDB fallback is configured, but its Atlas connection must be restored before it can take over.";
-        }
-        toast({ title: "Registration failed", description, variant: "destructive" });
-        return;
-      }
-
-      if (!authData.user) {
-        toast({ title: "Registration failed", description: "No user returned. Please try again.", variant: "destructive" });
-        return;
-      }
-
-      // Email confirmation required — session is null
-      if (!authData.session) {
-        toast({
-          title: "Check your email",
-          description: "A confirmation link was sent to " + data.email + ". To skip this, go to Supabase → Auth → Settings → disable \"Enable email confirmations\".",
-        });
-        return;
-      }
-
-      // Insert profile row
-      let userError: Error | null = null;
-      try {
-        await createUser({
-        id: authData.user.id,
+      const result = await mongoRegister({
         name: data.name,
         username: data.username,
         email: data.email,
         phone: data.phone,
-        password: "supabase_auth",
-        status: "Hey there! I am using WhatsChat.",
-        friends: [],
-        friend_requests: [],
-        sent_requests: [],
-        });
-      } catch (error) {
-        userError = error instanceof Error ? error : new Error("Could not create profile");
-      }
-
-      if (userError) {
-        toast({ title: "Profile setup error", description: userError.message, variant: "destructive" });
-      } else {
-        await refreshUser();
-        toast({ title: "Welcome!", description: "Account created successfully." });
-      }
+        password: data.password,
+      });
+      setMongoToken(result.token);
+      toast({ title: "Welcome!", description: "Account created successfully." });
+      window.location.reload();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unexpected error. Please try again.";
       toast({ title: "Registration error", description: msg, variant: "destructive" });

@@ -32,7 +32,8 @@ function userShape(input: Record<string, unknown>, id: string) {
 }
 
 router.get("/storage-health", async (_req, res) => {
-  res.json({ mode: await getStorageMode() });
+  const mode = await getStorageMode();
+  res.json({ mode, available: Boolean(await getMongoDb()) });
 });
 
 router.get("/users/:id", async (req, res) => {
