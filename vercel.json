@@ -4,7 +4,7 @@
   "installCommand": "pnpm install",
   "functions": {
     "api/[...path].js": {
-      "includeFiles": ["artifacts/api-server/dist/vercel/**"]
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
     }
   },
   "rewrites": [{ "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }]
