@@ -2,5 +2,10 @@
   "buildCommand": "pnpm --filter @workspace/api-server run build:vercel && pnpm --filter @workspace/chat-app run build:vercel",
   "outputDirectory": "artifacts/chat-app/dist/public",
   "installCommand": "pnpm install",
+  "functions": {
+    "api/[...path].js": {
+      "includeFiles": ["artifacts/api-server/dist/vercel/**"]
+    }
+  },
   "rewrites": [{ "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }]
 }
