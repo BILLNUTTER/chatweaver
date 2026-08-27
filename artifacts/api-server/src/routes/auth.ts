@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
-import { getMongoDb, cleanDocument } from "../lib/mongo";
+import { getMongoDb, cleanDocument, isMongoConfigured } from "../lib/mongo";
 
 const router: IRouter = Router();
-const sessionSecret = process.env.SESSION_SECRET ?? "chatweaver-development-secret";
+const sessionSecret = process.env.SESSION_SECRET;
 const sessionLifetimeSeconds = 60 * 60 * 24 * 30;
 
 function hashPassword(password: string, salt = randomBytes(16).toString("hex")) {
@@ -21,6 +21,7 @@ function verifyPassword(password: string, stored: string) {
 }
 
 function createToken(userId: string) {
+  if (!sessionSecret) throw new Error("SESSION_SECRET is not configured");
   const payload = Buffer.from(JSON.stringify({
     sub: userId,
     exp: Math.floor(Date.now() / 1000) + sessionLifetimeSeconds,
@@ -30,6 +31,7 @@ function createToken(userId: string) {
 }
 
 function readToken(request: { headers: { authorization?: string } }) {
+  if (!sessionSecret) return null;
   const token = request.headers.authorization?.replace(/^Bearer\s+/i, "");
   if (!token) return null;
   const [payload, signature] = token.split(".");
@@ -79,7 +81,14 @@ function profileFromInput(input: Record<string, unknown>, id: string, passwordHa
 
 router.post("/auth/register", async (req, res) => {
   const db = await getMongoDb();
-  if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
+  if (!db) {
+    return res.status(503).json({
+      error: isMongoConfigured()
+        ? "MongoDB connection unavailable. Check Atlas network access and cluster status."
+        : "MONGODB_URI is not configured in this deployment.",
+    });
+  }
+  if (!sessionSecret) return res.status(503).json({ error: "SESSION_SECRET is not configured in this deployment." });
   const input = req.body as Record<string, unknown>;
   const email = String(input.email ?? "").toLowerCase();
   const username = String(input.username ?? "").toLowerCase();
@@ -110,7 +119,14 @@ router.post("/auth/register", async (req, res) => {
 
 router.post("/auth/login", async (req, res) => {
   const db = await getMongoDb();
-  if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
+  if (!db) {
+    return res.status(503).json({
+      error: isMongoConfigured()
+        ? "MongoDB connection unavailable. Check Atlas network access and cluster status."
+        : "MONGODB_URI is not configured in this deployment.",
+    });
+  }
+  if (!sessionSecret) return res.status(503).json({ error: "SESSION_SECRET is not configured in this deployment." });
   const input = req.body as Record<string, unknown>;
   const email = String(input.email ?? "").toLowerCase();
   const user = await db.collection("users").findOne({ email });

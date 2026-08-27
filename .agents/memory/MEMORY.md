@@ -1,0 +1,1 @@
+- [Vercel API deployment](vercel-api-deployment.md) — deploy the MongoDB API as a generated serverless bundle and configure its production secrets separately.

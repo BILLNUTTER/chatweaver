@@ -7,6 +7,10 @@ const databaseName = process.env.MONGODB_DATABASE ?? "chatweaver";
 let client: MongoClient | null = null;
 let databasePromise: Promise<Db | null> | null = null;
 
+export function isMongoConfigured(): boolean {
+  return Boolean(uri);
+}
+
 export async function getMongoDb(): Promise<Db | null> {
   if (!uri) return null;
   if (databasePromise) return databasePromise;
