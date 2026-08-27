@@ -36,7 +36,6 @@ await build({
   entryNames: "app",
   outExtension: { ".js": ".mjs" },
   logLevel: "info",
-  external: ["mongodb"],
   define: { "process.env.NODE_ENV": '"production"' },
   sourcemap: "linked",
   plugins: [resolveTypeScriptJsImports],

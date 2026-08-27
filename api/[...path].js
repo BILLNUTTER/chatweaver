@@ -3,4 +3,6 @@
 // workspace's Node16 TypeScript source tree.
 import app from "../artifacts/api-server/dist/vercel/app.mjs";
 
-export default app;
+export default function handler(req, res) {
+  return app(req, res);
+}
