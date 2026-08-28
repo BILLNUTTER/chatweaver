@@ -16,3 +16,5 @@ Vercel's `functions.<function>.includeFiles` schema expects a single glob string
 Vercel may route a root catch-all only for one API path segment in this workspace. Authentication and resource-ID routes should have explicit dynamic function entrypoints under their route family.
 
 User documents stored in MongoDB can contain authentication fields even when legacy client types call the field `password`; every user response must pass through a server-side public projection that removes both `password` and `password_hash`.
+
+Vercel treats these `.js` API route files as CommonJS in this workspace. They must dynamically import the shared ESM handler rather than statically re-exporting an `.mjs` module.
