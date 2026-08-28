@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
-import { getMongoDb, cleanDocument, isMongoConfigured } from "../lib/mongo";
+import { getMongoDb, isMongoConfigured, publicUser } from "../lib/mongo";
 
 const router: IRouter = Router();
 const sessionSecret = process.env.SESSION_SECRET;
@@ -44,16 +44,6 @@ function readToken(request: { headers: { authorization?: string } }) {
   } catch {
     return null;
   }
-}
-
-function publicUser(user: Record<string, unknown> | null) {
-  if (!user) return null;
-  const safe = cleanDocument(user);
-  if (!safe) return null;
-  const result = { ...(safe as Record<string, unknown>) };
-  delete result.password;
-  delete result.password_hash;
-  return result;
 }
 
 function profileFromInput(input: Record<string, unknown>, id: string, passwordHash: string) {

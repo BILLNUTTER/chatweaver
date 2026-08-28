@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "node:crypto";
 import { type Document } from "mongodb";
-import { asDate, cleanDocument, getMongoDb, getStorageMode } from "../lib/mongo";
+import { asDate, cleanDocument, getMongoDb, getStorageMode, publicUser } from "../lib/mongo";
 
 const router: IRouter = Router();
 
@@ -16,7 +16,6 @@ function userShape(input: Record<string, unknown>, id: string) {
     username: String(input.username ?? ""),
     email: String(input.email ?? "").toLowerCase(),
     phone: String(input.phone ?? ""),
-    password: String(input.password ?? "supabase_auth"),
     profile_picture: (input.profile_picture as string | null) ?? null,
     cover_photo: (input.cover_photo as string | null) ?? null,
     is_admin: Boolean(input.is_admin ?? false),
@@ -40,7 +39,7 @@ router.get("/users/:id", async (req, res) => {
   const db = await getMongoDb();
   if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
   const user = await db.collection("users").findOne({ id: req.params.id });
-  return res.json(cleanDocument(user));
+  return res.json(publicUser(user));
 });
 
 router.get("/users", async (req, res) => {
@@ -62,7 +61,7 @@ router.get("/users", async (req, res) => {
     ];
   }
   const users = await db.collection("users").find(filter).sort({ name: 1 }).limit(60).toArray();
-  return res.json(users.map(cleanDocument));
+  return res.json(users.map(publicUser));
 });
 
 router.post("/users", async (req, res) => {
@@ -83,7 +82,7 @@ router.post("/users", async (req, res) => {
   }
   const user = userShape(input, id);
   await db.collection("users").replaceOne({ id }, user, { upsert: true });
-  return res.status(201).json(user);
+  return res.status(201).json(publicUser(user));
 });
 
 router.patch("/users/:id", async (req, res) => {
@@ -95,7 +94,7 @@ router.patch("/users/:id", async (req, res) => {
   delete update.phone;
   delete update.password;
   await db.collection("users").updateOne({ id: req.params.id }, { $set: update }, { upsert: false });
-  return res.json(cleanDocument(await db.collection("users").findOne({ id: req.params.id })));
+  return res.json(publicUser(await db.collection("users").findOne({ id: req.params.id })));
 });
 
 router.delete("/users/:id", async (req, res) => {

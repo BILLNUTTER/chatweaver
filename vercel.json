@@ -5,6 +5,18 @@
   "functions": {
     "api/[...path].js": {
       "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/auth/[path].js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/users/[id].js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/conversations/[id].js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/messages/[id].js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
     }
   },
   "rewrites": [{ "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }]

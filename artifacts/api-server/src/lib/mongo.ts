@@ -90,3 +90,12 @@ export function cleanDocument<T extends Document>(document: T | null): Omit<T, "
   const { _id: _, ...rest } = document;
   return rest as Omit<T, "_id">;
 }
+
+export function publicUser(document: Document | null) {
+  const safe = cleanDocument(document);
+  if (!safe) return null;
+  const result = { ...(safe as Record<string, unknown>) };
+  delete result.password;
+  delete result.password_hash;
+  return result;
+}
