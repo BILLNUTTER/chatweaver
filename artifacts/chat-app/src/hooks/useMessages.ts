@@ -81,30 +81,37 @@ export function useMessages(conversationId: string | null) {
     setLoading(true);
 
     let data: DBMessage[];
+    let withSenders: MessageWithSender[];
     try {
       data = await getMessages(conversationId);
-    } catch {
-      setMessages([]);
+      withSenders = await buildWithSenders(data);
+    } catch (error) {
+      // Keep the last good message list during a brief API or profile lookup failure.
+      console.warn("Could not refresh messages", error);
       setLoading(false);
       return;
     }
 
-    const withSenders = await buildWithSenders(data);
     setMessages(current => mergeFetchedMessages(withSenders, current));
     setLoading(false);
 
     // Mark messages as read — must await or Supabase JS v2 never fires the request
     if (user) {
-      const unread = data.filter(m => m.sender_id !== user.id && !m.read_by?.includes(user.id));
-      if (unread.length > 0) {
-        // Update each message's read_by individually (can't batch different arrays)
-        await Promise.all(
-          unread.map(msg =>
-            updateMessage(msg.id, { read_by: [...(msg.read_by ?? []), user.id] })
-          )
-        );
+      try {
+        const unread = data.filter(m => m.sender_id !== user.id && !m.read_by?.includes(user.id));
+        if (unread.length > 0) {
+          // Update each message's read_by individually (can't batch different arrays)
+          await Promise.all(
+            unread.map(msg =>
+              updateMessage(msg.id, { read_by: [...(msg.read_by ?? []), user.id] })
+            )
+          );
+        }
+        await updateConversation(conversationId, { unread_by: [] });
+      } catch (error) {
+        // Read receipts are secondary and must not break the visible conversation.
+        console.warn("Could not update message read state", error);
       }
-      await updateConversation(conversationId, { unread_by: [] });
     }
   };
 

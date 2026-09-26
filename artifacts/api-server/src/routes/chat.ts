@@ -116,9 +116,15 @@ router.get("/conversations", async (req, res) => {
   if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
   const userId = String(req.query.userId ?? "");
   const cutoff = new Date(Date.now() - 72 * 60 * 60 * 1000);
+  const cutoffIso = cutoff.toISOString();
   const conversations = await db.collection("conversations").find({
     participants: userId,
-    $or: [{ updated_at: { $gt: cutoff } }, { last_message_at: { $gt: cutoff } }],
+    $or: [
+      { updated_at: { $gt: cutoff } },
+      { updated_at: { $gt: cutoffIso } },
+      { last_message_at: { $gt: cutoff } },
+      { last_message_at: { $gt: cutoffIso } },
+    ],
   }).sort({ last_message_at: -1, updated_at: -1 }).toArray();
   return res.json(conversations.map(cleanDocument));
 });
@@ -160,9 +166,15 @@ router.get("/messages", async (req, res) => {
   const db = await getMongoDb();
   if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
   const conversationId = String(req.query.conversationId ?? "");
+  const nowDate = new Date();
+  const nowIso = nowDate.toISOString();
   const messages = await db.collection("messages").find({
     conversation_id: conversationId,
-    $or: [{ expires_at: { $gt: new Date() } }, { expires_at: { $exists: false } }],
+    $or: [
+      { expires_at: { $gt: nowDate } },
+      { expires_at: { $gt: nowIso } },
+      { expires_at: { $exists: false } },
+    ],
   }).sort({ created_at: 1 }).toArray();
   return res.json(messages.map(cleanDocument));
 });

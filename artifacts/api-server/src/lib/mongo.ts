@@ -53,17 +53,22 @@ export async function cleanupExpiredMessages(): Promise<void> {
   const db = await getMongoDb();
   if (!db) return;
   const cutoff = new Date(Date.now() - 72 * 60 * 60 * 1000);
+  const cutoffIso = cutoff.toISOString();
   const messageResult = await db.collection("messages").deleteMany({
     $or: [
       { expires_at: { $lte: cutoff } },
+      { expires_at: { $lte: cutoffIso } },
       { created_at: { $lte: cutoff }, is_personal_chat: true },
+      { created_at: { $lte: cutoffIso }, is_personal_chat: true },
     ],
   });
   const staleConversations = await db.collection("conversations").find({
     is_group: false,
     $or: [
       { last_message_at: { $lte: cutoff } },
+      { last_message_at: { $lte: cutoffIso } },
       { last_message_at: null, created_at: { $lte: cutoff } },
+      { last_message_at: null, created_at: { $lte: cutoffIso } },
     ],
   }).project({ id: 1 }).toArray();
   const conversationIds = staleConversations.map((conversation) => conversation.id);

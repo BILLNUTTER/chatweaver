@@ -20,3 +20,5 @@ User documents stored in MongoDB can contain authentication fields even when leg
 Vercel treats these `.js` API route files as CommonJS in this workspace. They must dynamically import the shared ESM handler rather than statically re-exporting an `.mjs` module.
 
 The chat API must disable browser caching and ETags; conditional `304` responses are not usable by the lightweight client because it has no response-body cache, and they make conversations appear empty.
+
+MongoDB chat timestamps may exist as ISO strings as well as native Date values. API expiry queries and cleanup must handle both representations or confirmed messages disappear on the next poll.
