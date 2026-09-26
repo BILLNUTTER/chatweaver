@@ -99,9 +99,9 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#efeae2] dark:bg-gray-950 relative">
+    <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-[#efeae2] dark:bg-gray-950 relative">
       {/* Header */}
-      <div className="px-3 py-3 bg-[#f0f2f5] dark:bg-gray-900 flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+      <div className="sticky top-0 z-20 shrink-0 px-3 py-2.5 bg-[#f0f2f5] dark:bg-gray-900 flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 shadow-sm">
         {/* Back button — mobile only */}
         {onBack && (
           <button
@@ -137,7 +137,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-1"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 space-y-1"
         style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}
       >
         {loading ? (
@@ -205,7 +205,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
 
       {/* Reply bar */}
       {replyTo && (
-        <div className="px-4 py-2 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex items-center gap-3">
+        <div className="shrink-0 sticky bottom-0 z-10 px-4 py-2 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex items-center gap-3">
           <div className="flex-1 bg-[#f0f2f5] dark:bg-gray-800 rounded-lg px-3 py-2 border-l-4 border-[#128C7E]">
             <p className="text-xs font-semibold text-[#128C7E]">{replyTo.sender?.name}</p>
             <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{replyTo.content ?? "Message"}</p>
@@ -217,7 +217,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
       )}
 
       {/* Input bar */}
-      <div className="px-4 py-3 bg-[#f0f2f5] dark:bg-gray-900 flex items-end gap-3">
+      <div className="shrink-0 sticky bottom-0 z-10 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-[#f0f2f5] dark:bg-gray-900 flex items-end gap-3">
         <div className="flex items-center gap-1">
           <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500 dark:text-gray-400">
             <Paperclip className="w-5 h-5" />

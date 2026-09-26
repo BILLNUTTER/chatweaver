@@ -5,6 +5,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
+app.disable("etag");
 
 app.use(
   pinoHttp({
@@ -28,6 +29,10 @@ app.use(
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  next();
+});
 
 app.use("/api", router);
 

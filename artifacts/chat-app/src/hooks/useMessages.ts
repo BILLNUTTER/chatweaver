@@ -54,6 +54,28 @@ export function useMessages(conversationId: string | null) {
     }));
   };
 
+  const mergeFetchedMessages = (
+    fetched: MessageWithSender[],
+    current: MessageWithSender[],
+  ): MessageWithSender[] => {
+    const pending = current.filter(message => message._optimistic);
+    const merged = [
+      ...fetched,
+      ...pending.filter(pendingMessage => !fetched.some(serverMessage =>
+        serverMessage.id === pendingMessage.id ||
+        (
+          serverMessage.sender_id === pendingMessage.sender_id &&
+          serverMessage.content === pendingMessage.content &&
+          Math.abs(new Date(serverMessage.created_at).getTime() - new Date(pendingMessage.created_at).getTime()) < 15_000
+        )
+      )),
+    ];
+
+    return merged.sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  };
+
   const fetchMessages = async () => {
     if (!conversationId) return;
     setLoading(true);
@@ -68,7 +90,7 @@ export function useMessages(conversationId: string | null) {
     }
 
     const withSenders = await buildWithSenders(data);
-    setMessages(withSenders);
+    setMessages(current => mergeFetchedMessages(withSenders, current));
     setLoading(false);
 
     // Mark messages as read — must await or Supabase JS v2 never fires the request
@@ -204,11 +226,11 @@ export function useMessages(conversationId: string | null) {
     let inserted: DBMessage;
     try {
       inserted = await createMessage({
-      conversation_id: conversationId,
-      sender_id: user.id,
-      content: content.trim(),
-      reply_to: replyToId ?? null,
-      read_by: [user.id],
+        conversation_id: conversationId,
+        sender_id: user.id,
+        content: content.trim(),
+        reply_to: replyToId ?? null,
+        read_by: [user.id],
       });
     } catch {
       setMessages(prev => prev.filter(m => m.id !== tempId));

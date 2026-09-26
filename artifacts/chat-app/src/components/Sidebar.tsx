@@ -125,10 +125,10 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
     : 0;
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full">
+    <div className="flex flex-col md:flex-row h-full min-h-0 w-full overflow-hidden">
 
       {/* ── MOBILE TOP BAR (hidden on md+) ── */}
-      <div className="md:hidden flex-shrink-0 bg-[#128C7E] dark:bg-gray-900 transition-colors">
+      <div className="md:hidden flex-shrink-0 sticky top-0 z-20 bg-[#128C7E] dark:bg-gray-900 transition-colors">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <Avatar src={dbUser?.profile_picture} name={dbUser?.name ?? "U"} size="sm" online />
@@ -177,7 +177,7 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
       </div>
 
       {/* ── PANEL CONTENT ── */}
-      <div className="flex flex-col flex-1 min-w-0 bg-white dark:bg-gray-900 md:border-r border-gray-200 dark:border-gray-800 transition-colors duration-200 overflow-hidden">
+      <div className="flex flex-col flex-1 min-h-0 min-w-0 bg-white dark:bg-gray-900 md:border-r border-gray-200 dark:border-gray-800 transition-colors duration-200 overflow-hidden">
 
         {/* ── CHATS ── */}
         {panel === "chats" && (

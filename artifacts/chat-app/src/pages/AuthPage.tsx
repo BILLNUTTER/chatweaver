@@ -23,14 +23,37 @@ const registerSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>;
 type RegisterForm = z.infer<typeof registerSchema>;
 
+const REMEMBERED_LOGIN_KEY = "whatschat_remembered_login";
+
+function getRememberedLogin(): LoginForm {
+  try {
+    const raw = window.localStorage.getItem(REMEMBERED_LOGIN_KEY);
+    if (!raw) return { email: "", password: "" };
+    const saved = JSON.parse(raw) as Partial<LoginForm>;
+    return {
+      email: typeof saved.email === "string" ? saved.email : "",
+      password: typeof saved.password === "string" ? saved.password : "",
+    };
+  } catch {
+    return { email: "", password: "" };
+  }
+}
+
 export default function AuthPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => {
+    try {
+      return Boolean(window.localStorage.getItem(REMEMBERED_LOGIN_KEY));
+    } catch {
+      return false;
+    }
+  });
   const { toast } = useToast();
   const loginForm = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: getRememberedLogin(),
   });
   const registerForm = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
@@ -41,6 +64,11 @@ export default function AuthPage() {
     setLoading(true);
     try {
       const result = await mongoLogin(data.email, data.password);
+      if (rememberMe) {
+        window.localStorage.setItem(REMEMBERED_LOGIN_KEY, JSON.stringify(data));
+      } else {
+        window.localStorage.removeItem(REMEMBERED_LOGIN_KEY);
+      }
       setMongoToken(result.token);
       window.location.reload();
     } catch (error) {
@@ -110,6 +138,7 @@ export default function AuthPage() {
                   <input
                     data-testid="input-email"
                     type="email"
+                      autoComplete="email"
                     {...loginForm.register("email")}
                     placeholder="you@example.com"
                     className={inputCls}
@@ -120,6 +149,7 @@ export default function AuthPage() {
                     <input
                       data-testid="input-password"
                       type={showPassword ? "text" : "password"}
+                      autoComplete="current-password"
                       {...loginForm.register("password")}
                       placeholder="••••••••"
                       className={inputCls + " pr-10"}
@@ -129,6 +159,17 @@ export default function AuthPage() {
                     </button>
                   </div>
                 </Field>
+                <label className="flex items-center gap-2.5 cursor-pointer select-none text-sm text-gray-600 dark:text-gray-400">
+                  <input
+                    data-testid="checkbox-remember-me"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={e => setRememberMe(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-[#128C7E] accent-[#128C7E] focus:ring-2 focus:ring-[#128C7E]"
+                  />
+                  <span>Remember me</span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">(on this device)</span>
+                </label>
                 <button data-testid="button-submit-login" type="submit" disabled={loading} className={submitCls}>
                   {loading ? "Signing in..." : "Sign In"}
                 </button>

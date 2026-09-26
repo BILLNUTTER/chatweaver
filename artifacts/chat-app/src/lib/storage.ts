@@ -12,6 +12,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`/api${path}`, {
       ...init,
+      cache: "no-store",
       signal: controller.signal,
       headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
     });

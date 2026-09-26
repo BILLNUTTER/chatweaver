@@ -15,45 +15,46 @@ export function useConversations() {
   const [loading, setLoading] = useState(true);
 
   const fetchConversations = async () => {
-    if (!user) return;
-
-    let convs: DBConversation[];
-    try {
-      convs = await getConversations(user.id);
-    } catch {
-      setConversations([]);
+    if (!user) {
       setLoading(false);
       return;
     }
 
-    const allIds = [...new Set(convs.flatMap(c => c.participants))];
-    const users = await getUsers({ ids: allIds });
-    const userMap = new Map(users.map(u => [u.id, u]));
+    try {
+      const convs: DBConversation[] = await getConversations(user.id);
+      const allIds = [...new Set(convs.flatMap(c => c.participants))];
+      const users = await getUsers({ ids: allIds });
+      const userMap = new Map(users.map(u => [u.id, u]));
 
-    // Count unread messages: sent by others, not yet read by me
-    const convIds = convs.map(c => c.id);
-    const unreadMap = new Map<string, number>();
-    if (convIds.length > 0) {
-      const messageLists = await Promise.all(convIds.map(id => getMessages(id)));
-      for (const messages of messageLists) {
-        for (const row of messages) {
-          if (row.sender_id !== user.id && !row.read_by?.includes(user.id)) {
-            unreadMap.set(row.conversation_id, (unreadMap.get(row.conversation_id) ?? 0) + 1);
+      // Count unread messages: sent by others, not yet read by me
+      const convIds = convs.map(c => c.id);
+      const unreadMap = new Map<string, number>();
+      if (convIds.length > 0) {
+        const messageLists = await Promise.all(convIds.map(id => getMessages(id)));
+        for (const messages of messageLists) {
+          for (const row of messages) {
+            if (row.sender_id !== user.id && !row.read_by?.includes(user.id)) {
+              unreadMap.set(row.conversation_id, (unreadMap.get(row.conversation_id) ?? 0) + 1);
+            }
           }
         }
       }
+
+      const detailed: ConversationWithDetails[] = convs.map(conv => {
+        const otherIds = conv.participants.filter(id => id !== user.id);
+        const other_user = otherIds.length === 1 ? (userMap.get(otherIds[0]) ?? null) : null;
+        const participants_data = conv.participants.map(id => userMap.get(id)).filter(Boolean) as DBUser[];
+        const unread_count = unreadMap.get(conv.id) ?? 0;
+        return { ...conv, other_user, participants_data, unread_count };
+      });
+
+      setConversations(detailed.filter(c => !c.is_admin_chat));
+    } catch (error) {
+      // Keep the last good list during a brief API restart or network failure.
+      console.warn("Could not refresh conversations", error);
+    } finally {
+      setLoading(false);
     }
-
-    const detailed: ConversationWithDetails[] = convs.map(conv => {
-      const otherIds = conv.participants.filter(id => id !== user.id);
-      const other_user = otherIds.length === 1 ? (userMap.get(otherIds[0]) ?? null) : null;
-      const participants_data = conv.participants.map(id => userMap.get(id)).filter(Boolean) as DBUser[];
-      const unread_count = unreadMap.get(conv.id) ?? 0;
-      return { ...conv, other_user, participants_data, unread_count };
-    });
-
-    setConversations(detailed.filter(c => !c.is_admin_chat));
-    setLoading(false);
   };
 
   // Instantly clear badge in local state; also clear unread_by in DB
