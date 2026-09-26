@@ -22,20 +22,39 @@ export function useConversations() {
 
     try {
       const convs: DBConversation[] = await getConversations(user.id);
-      const allIds = [...new Set(convs.flatMap(c => c.participants))];
-      const users = await getUsers({ ids: allIds });
-      const userMap = new Map(users.map(u => [u.id, u]));
+      const visibleConversations = convs
+        .filter(c => !c.is_admin_chat)
+        .map<ConversationWithDetails>(conversation => ({
+          ...conversation,
+          other_user: null,
+          participants_data: [],
+          unread_count: 0,
+        }));
 
-      const detailed: ConversationWithDetails[] = convs.map(conv => {
-        const otherIds = conv.participants.filter(id => id !== user.id);
-        const other_user = otherIds.length === 1 ? (userMap.get(otherIds[0]) ?? null) : null;
-        const participants_data = conv.participants.map(id => userMap.get(id)).filter(Boolean) as DBUser[];
-        return { ...conv, other_user, participants_data, unread_count: 0 };
-      });
-
-      const visibleConversations = detailed.filter(c => !c.is_admin_chat);
+      // The chat list must not wait for profile or unread-message lookups.
       setConversations(visibleConversations);
       setLoading(false);
+
+      try {
+        const allIds = [...new Set(convs.flatMap(c => c.participants))];
+        const users = await getUsers({ ids: allIds });
+        const userMap = new Map(users.map(u => [u.id, u]));
+
+        setConversations(current =>
+          current.map(conversation => {
+            const otherIds = conversation.participants.filter(id => id !== user.id);
+            return {
+              ...conversation,
+              other_user: otherIds.length === 1 ? (userMap.get(otherIds[0]) ?? null) : null,
+              participants_data: conversation.participants
+                .map(id => userMap.get(id))
+                .filter(Boolean) as DBUser[],
+            };
+          })
+        );
+      } catch (error) {
+        console.warn("Could not load conversation participant details", error);
+      }
 
       // Unread counts are secondary data. Do not block the chat list on them.
       if (visibleConversations.length > 0) {

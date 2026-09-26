@@ -263,7 +263,7 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
                   </>
                 )
               ) : (
-                convsLoading ? <LoadingList /> :
+                convsLoading && conversations.length === 0 ? <LoadingList /> :
                 conversations.length === 0 ? (
                   <EmptyHint icon={<MessageCircle className="w-8 h-8" />}
                     text="No chats yet — go to People to find someone" />
