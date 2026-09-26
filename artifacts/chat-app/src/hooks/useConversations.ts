@@ -26,29 +26,39 @@ export function useConversations() {
       const users = await getUsers({ ids: allIds });
       const userMap = new Map(users.map(u => [u.id, u]));
 
-      // Count unread messages: sent by others, not yet read by me
-      const convIds = convs.map(c => c.id);
-      const unreadMap = new Map<string, number>();
-      if (convIds.length > 0) {
-        const messageLists = await Promise.all(convIds.map(id => getMessages(id)));
-        for (const messages of messageLists) {
-          for (const row of messages) {
-            if (row.sender_id !== user.id && !row.read_by?.includes(user.id)) {
-              unreadMap.set(row.conversation_id, (unreadMap.get(row.conversation_id) ?? 0) + 1);
-            }
-          }
-        }
-      }
-
       const detailed: ConversationWithDetails[] = convs.map(conv => {
         const otherIds = conv.participants.filter(id => id !== user.id);
         const other_user = otherIds.length === 1 ? (userMap.get(otherIds[0]) ?? null) : null;
         const participants_data = conv.participants.map(id => userMap.get(id)).filter(Boolean) as DBUser[];
-        const unread_count = unreadMap.get(conv.id) ?? 0;
-        return { ...conv, other_user, participants_data, unread_count };
+        return { ...conv, other_user, participants_data, unread_count: 0 };
       });
 
-      setConversations(detailed.filter(c => !c.is_admin_chat));
+      const visibleConversations = detailed.filter(c => !c.is_admin_chat);
+      setConversations(visibleConversations);
+      setLoading(false);
+
+      // Unread counts are secondary data. Do not block the chat list on them.
+      if (visibleConversations.length > 0) {
+        const messageResults = await Promise.allSettled(
+          visibleConversations.map(conversation => getMessages(conversation.id))
+        );
+        const unreadMap = new Map<string, number>();
+        messageResults.forEach((result, index) => {
+          if (result.status !== "fulfilled") return;
+          for (const message of result.value) {
+            if (message.sender_id !== user.id && !message.read_by?.includes(user.id)) {
+              const conversationId = visibleConversations[index].id;
+              unreadMap.set(conversationId, (unreadMap.get(conversationId) ?? 0) + 1);
+            }
+          }
+        });
+        setConversations(current =>
+          current.map(conversation => ({
+            ...conversation,
+            unread_count: unreadMap.get(conversation.id) ?? conversation.unread_count,
+          }))
+        );
+      }
     } catch (error) {
       // Keep the last good list during a brief API restart or network failure.
       console.warn("Could not refresh conversations", error);
