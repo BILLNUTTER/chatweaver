@@ -31,8 +31,23 @@ export function useConversations() {
           unread_count: 0,
         }));
 
-      // The chat list must not wait for profile or unread-message lookups.
-      setConversations(visibleConversations);
+      // Refresh the server-owned conversation fields without clearing enriched
+      // participant data that is already visible to the user.
+      setConversations(current => {
+        const currentById = new Map(current.map(conversation => [conversation.id, conversation]));
+        return visibleConversations.map(conversation => {
+          const previous = currentById.get(conversation.id);
+          return previous
+            ? {
+                ...previous,
+                ...conversation,
+                other_user: previous.other_user,
+                participants_data: previous.participants_data,
+                unread_count: previous.unread_count,
+              }
+            : conversation;
+        });
+      });
       setLoading(false);
 
       try {
