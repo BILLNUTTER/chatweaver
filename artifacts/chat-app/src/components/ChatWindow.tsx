@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Search, MoreVertical, Send, Paperclip, Image, X, Reply, Trash2, ChevronDown, ArrowLeft, Clock } from "lucide-react";
+import { Search, MoreVertical, Send, Paperclip, Image, X, Reply, Trash2, ChevronDown, ArrowLeft, Clock, FileText, Check } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMessages, type MessageWithSender } from "@/hooks/useMessages";
@@ -22,10 +22,17 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showChatSearch, setShowChatSearch] = useState(false);
+  const [chatSearch, setChatSearch] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const chatSearchRef = useRef<HTMLInputElement>(null);
 
   const conv = conversations.find(c => c.id === conversationId);
   const otherUser = conv?.other_user;
@@ -66,8 +73,10 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
   const handleSend = async () => {
-    if (!input.trim()) return;
-    const content = input;
+    const content = selectedFile
+      ? `${input.trim()}${input.trim() ? "\n" : ""}📎 ${selectedFile.name}`
+      : input;
+    if (!content.trim()) return;
     if (containsPhoneNumber(content)) {
       setSendError(blockedMessageError);
       inputRef.current?.focus();
@@ -80,8 +89,26 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
     if (error) {
       setInput(content);
       setSendError(error);
+    } else {
+      setSelectedFile(null);
     }
     inputRef.current?.focus();
+  };
+
+  const openChatSearch = () => {
+    setShowMenu(false);
+    setShowChatSearch(true);
+    window.setTimeout(() => chatSearchRef.current?.focus(), 0);
+  };
+
+  const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    if (file) {
+      setSelectedFile(file);
+      setSendError(null);
+      inputRef.current?.focus();
+    }
+    event.target.value = "";
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -110,10 +137,22 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
     return acc;
   }, []);
 
+  const normalizedChatSearch = chatSearch.trim().toLowerCase();
+  const visibleGroupedMessages = normalizedChatSearch
+    ? groupedMessages
+      .map(group => ({
+        ...group,
+        messages: group.messages.filter(message =>
+          `${message.content ?? ""} ${message.sender?.name ?? ""}`.toLowerCase().includes(normalizedChatSearch),
+        ),
+      }))
+      .filter(group => group.messages.length > 0)
+    : groupedMessages;
+
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-[#efeae2] dark:bg-gray-950 relative">
+    <div className="flex-1 min-w-0 flex flex-col h-full max-h-full min-h-0 overflow-hidden bg-[#efeae2] dark:bg-gray-950 relative">
       {/* Header */}
-      <div className="sticky top-0 z-20 shrink-0 px-3 py-2.5 bg-[#f0f2f5] dark:bg-gray-900 flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+      <div className="relative z-20 flex-none px-3 py-2.5 bg-[#f0f2f5] dark:bg-gray-900 flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 shadow-sm">
         {/* Back button — mobile only */}
         {onBack && (
           <button
@@ -136,20 +175,60 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
           </p>
         </div>
         <div className="flex items-center gap-1">
-          <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500 dark:text-gray-400">
+          <button
+            type="button"
+            onClick={openChatSearch}
+            aria-label="Search this chat"
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500 dark:text-gray-400"
+          >
             <Search className="w-5 h-5" />
           </button>
-          <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500 dark:text-gray-400">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowMenu(value => !value)}
+              aria-label="Chat options"
+              aria-expanded={showMenu}
+              className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500 dark:text-gray-400"
+            >
             <MoreVertical className="w-5 h-5" />
-          </button>
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 top-11 z-50 w-48 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 shadow-xl">
+                <button type="button" onClick={openChatSearch} className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                  Search in chat
+                </button>
+                <button type="button" onClick={() => { setShowMenu(false); scrollToBottom(); }} className="w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                  Scroll to latest
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {showChatSearch && (
+        <div className="flex-none px-3 py-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2">
+          <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <input
+            ref={chatSearchRef}
+            value={chatSearch}
+            onChange={event => setChatSearch(event.target.value)}
+            placeholder="Search messages"
+            className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 dark:text-white focus:outline-none"
+          />
+          {chatSearch && <span className="text-xs text-gray-400">{visibleGroupedMessages.reduce((count, group) => count + group.messages.length, 0)} found</span>}
+          <button type="button" onClick={() => { setShowChatSearch(false); setChatSearch(""); }} aria-label="Close chat search" className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Messages */}
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 space-y-1"
+        className="flex-1 basis-0 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 space-y-1"
         style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}
       >
         {loading && messages.length === 0 ? (
@@ -158,7 +237,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
           </div>
         ) : (
           <>
-            {groupedMessages.map(({ date, messages: dayMsgs }) => (
+             {visibleGroupedMessages.map(({ date, messages: dayMsgs }) => (
               <div key={date}>
                 <div className="flex justify-center my-4">
                   <span className="text-xs bg-white/80 dark:bg-gray-800/80 text-gray-500 dark:text-gray-400 px-3 py-1 rounded-full shadow-sm">{date}</span>
@@ -200,6 +279,9 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
                 <span className="text-xs text-gray-500">{typingUsers[0].name} is typing...</span>
               </div>
             )}
+            {normalizedChatSearch && visibleGroupedMessages.length === 0 && (
+              <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">No matching messages</p>
+            )}
             <div ref={messagesEndRef} />
           </>
         )}
@@ -223,7 +305,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
 
       {/* Reply bar */}
       {replyTo && (
-        <div className="shrink-0 sticky bottom-0 z-10 px-4 py-2 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex items-center gap-3">
+        <div className="shrink-0 relative z-10 px-4 py-2 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex items-center gap-3">
           <div className="flex-1 bg-[#f0f2f5] dark:bg-gray-800 rounded-lg px-3 py-2 border-l-4 border-[#128C7E]">
             <p className="text-xs font-semibold text-[#128C7E]">{replyTo.sender?.name}</p>
             <p className="text-xs text-gray-600 dark:text-gray-400 truncate">{replyTo.content ?? "Message"}</p>
@@ -235,16 +317,28 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
       )}
 
       {/* Input bar */}
-      <div className="shrink-0 sticky bottom-0 z-10 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-[#f0f2f5] dark:bg-gray-900 flex items-end gap-3">
+      <div className="shrink-0 relative z-10 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] bg-[#f0f2f5] dark:bg-gray-900 flex items-end gap-3">
         <div className="flex items-center gap-1">
-          <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500 dark:text-gray-400">
+          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelected} />
+          <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelected} />
+          <button type="button" onClick={() => fileInputRef.current?.click()} aria-label="Attach a file" className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500 dark:text-gray-400">
             <Paperclip className="w-5 h-5" />
           </button>
-          <button className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500 dark:text-gray-400">
+          <button type="button" onClick={() => imageInputRef.current?.click()} aria-label="Attach an image" className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-gray-500 dark:text-gray-400">
             <Image className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl flex items-end shadow-sm">
+        <div className="relative min-w-0 flex-1 bg-white dark:bg-gray-800 rounded-2xl flex items-end shadow-sm">
+          {selectedFile && (
+            <div className="absolute bottom-full left-4 right-4 mb-2 flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-xs text-gray-700 dark:text-gray-200 shadow-lg">
+              <FileText className="w-4 h-4 text-[#128C7E] flex-shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{selectedFile.name}</span>
+              <Check className="w-4 h-4 text-[#128C7E]" />
+              <button type="button" onClick={() => setSelectedFile(null)} aria-label="Remove selected file" className="p-0.5 text-gray-400 hover:text-red-500">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <textarea
             ref={inputRef}
             data-testid="input-message"
