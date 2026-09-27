@@ -61,7 +61,9 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
       : "";
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const messagesPane = containerRef.current;
+    if (!messagesPane) return;
+    messagesPane.scrollTo({ top: messagesPane.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
   const handleScroll = () => {
@@ -70,7 +72,11 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
     setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 200);
   };
 
-  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = () => {
+    const messagesPane = containerRef.current;
+    if (!messagesPane) return;
+    messagesPane.scrollTo({ top: messagesPane.scrollHeight, behavior: "smooth" });
+  };
 
   const handleSend = async () => {
     const content = selectedFile

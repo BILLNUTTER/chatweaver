@@ -10,7 +10,7 @@ export default function ChatPage() {
   const handleBack = () => setSelectedConversationId(null);
 
   return (
-    <div className="flex h-[100dvh] max-h-[100dvh] min-h-0 overflow-hidden overscroll-none bg-white dark:bg-gray-900 transition-colors duration-200">
+    <div className="fixed inset-0 flex h-[100dvh] max-h-[100dvh] min-h-0 overflow-hidden overscroll-none bg-white dark:bg-gray-900 transition-colors duration-200">
       <div className={`
         flex-shrink-0 h-full min-h-0 overflow-hidden
         ${selectedConversationId ? "hidden md:flex" : "flex w-full"}
