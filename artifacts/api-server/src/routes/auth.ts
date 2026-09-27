@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
-import { getMongoDb, isMongoConfigured, publicUser } from "../lib/mongo";
+import { getMongoDb, isMongoConfigured, privateUser } from "../lib/mongo";
 
 const router: IRouter = Router();
 const sessionSecret = process.env.SESSION_SECRET;
@@ -104,7 +104,7 @@ router.post("/auth/register", async (req, res) => {
     }
     throw error;
   }
-  return res.status(201).json({ token: createToken(user.id), user: publicUser(user) });
+  return res.status(201).json({ token: createToken(user.id), user: privateUser(user) });
 });
 
 router.post("/auth/login", async (req, res) => {
@@ -124,14 +124,14 @@ router.post("/auth/login", async (req, res) => {
     return res.status(401).json({ error: "Invalid email or password." });
   }
   await db.collection("users").updateOne({ id: user.id }, { $set: { last_seen: new Date().toISOString() } });
-  return res.json({ token: createToken(String(user.id)), user: publicUser(user) });
+  return res.json({ token: createToken(String(user.id)), user: privateUser(user) });
 });
 
 router.get("/auth/me", async (req, res) => {
   const db = await getMongoDb();
   const userId = readToken(req);
   if (!db || !userId) return res.status(401).json({ error: "Invalid session" });
-  return res.json(publicUser(await db.collection("users").findOne({ id: userId })));
+  return res.json(privateUser(await db.collection("users").findOne({ id: userId })));
 });
 
 export default router;

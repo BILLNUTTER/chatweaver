@@ -99,6 +99,22 @@ export function cleanDocument<T extends Document>(document: T | null): Omit<T, "
 export function publicUser(document: Document | null) {
   const safe = cleanDocument(document);
   if (!safe) return null;
+  const user = safe as Record<string, unknown>;
+  return {
+    id: user.id,
+    name: user.name,
+    username: user.username,
+    profile_picture: user.profile_picture ?? null,
+    cover_photo: user.cover_photo ?? null,
+    status: user.status ?? null,
+    last_seen: user.last_seen ?? null,
+    is_verified: Boolean(user.is_verified ?? false),
+  };
+}
+
+export function privateUser(document: Document | null) {
+  const safe = cleanDocument(document);
+  if (!safe) return null;
   const result = { ...(safe as Record<string, unknown>) };
   delete result.password;
   delete result.password_hash;

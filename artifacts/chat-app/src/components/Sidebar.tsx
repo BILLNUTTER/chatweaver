@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import {
   MessageCircle, Users, Settings, Search, Plus, Moon, Sun, LogOut,
-  X, Check, Trash2, AlertTriangle, UserSearch, Phone
+  X, Check, Trash2, AlertTriangle, UserSearch
 } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useConversations, type ConversationWithDetails } from "@/hooks/useConversations";
 import { useContacts } from "@/hooks/useContacts";
+import { updateUser } from "@/lib/storage";
+import { useToast } from "@/hooks/use-toast";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import type { DBUser } from "@/lib/database.types";
 
@@ -26,10 +28,11 @@ interface GlobalResults {
 }
 
 export function Sidebar({ selectedConversationId, onSelectConversation }: SidebarProps) {
-  const { dbUser, signOut, deleteAccount } = useAuth();
+  const { user, dbUser, signOut, deleteAccount, refreshUser } = useAuth();
   const { conversations, loading: convsLoading, markConversationRead } = useConversations();
   const { contacts, loading: contactsLoading, addContact, searchUsers, startConversation } = useContacts();
   const { theme, toggleTheme } = useTheme();
+  const { toast } = useToast();
 
   const [panel, setPanel] = useState<Panel>("chats");
   const [contactTab, setContactTab] = useState<ContactTab>("find");
@@ -48,6 +51,15 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [profileUsername, setProfileUsername] = useState("");
+  const [profileStatus, setProfileStatus] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  useEffect(() => {
+    if (!dbUser) return;
+    setProfileUsername(dbUser.username);
+    setProfileStatus(dbUser.status ?? "");
+  }, [dbUser?.id]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -100,6 +112,27 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
     const { error } = await deleteAccount();
     setDeleteLoading(false);
     if (error) setDeleteError(error);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setProfileSaving(true);
+    try {
+      await updateUser(user.id, {
+        username: profileUsername.trim().toLowerCase(),
+        status: profileStatus.trim(),
+      });
+      await refreshUser();
+      toast({ title: "Profile updated", description: "Your username and status were saved." });
+    } catch (error) {
+      toast({
+        title: "Profile not saved",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
   const isOnline = (lastSeen?: string | null) => {
@@ -320,7 +353,7 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
                 <div className="relative">
                   <UserSearch className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
                   <input value={findQuery} onChange={e => setFindQuery(e.target.value)}
-                    placeholder="Search by name, phone, username…"
+                   placeholder="Search by name or username…"
                     className="w-full pl-9 pr-8 py-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#128C7E] border-none transition-colors duration-200"
                     autoFocus />
                   {findQuery && (
@@ -358,7 +391,6 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
                         <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">{u.name}</p>
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <span className="text-xs text-gray-400 dark:text-gray-500">@{u.username}</span>
-                          {u.phone && <span className="text-xs text-gray-400 dark:text-gray-500">· {u.phone}</span>}
                         </div>
                       </div>
                     </button>
@@ -378,22 +410,19 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
               {contactTab === "my" && (
                 contactsLoading ? <LoadingList /> :
                 contacts.filter(c =>
-                  !findQuery || c.name.toLowerCase().includes(findQuery.toLowerCase()) || c.phone?.toLowerCase().includes(findQuery.toLowerCase())
+                   !findQuery || c.name.toLowerCase().includes(findQuery.toLowerCase()) || c.username.toLowerCase().includes(findQuery.toLowerCase())
                 ).length === 0 ? (
                   <EmptyHint icon={<Users className="w-8 h-8" />}
                     text={findQuery ? "No matching contacts" : "No contacts yet — use Find People to add someone"} />
                 ) : contacts.filter(c =>
-                  !findQuery || c.name.toLowerCase().includes(findQuery.toLowerCase()) || c.phone?.toLowerCase().includes(findQuery.toLowerCase())
+                   !findQuery || c.name.toLowerCase().includes(findQuery.toLowerCase()) || c.username.toLowerCase().includes(findQuery.toLowerCase())
                 ).map(contact => (
                   <button key={contact.id} onClick={() => handleUserClick(contact.id)}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left">
                     <Avatar src={contact.profile_picture} name={contact.name} size="md" online={onlineProp(contact.last_seen)} />
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-gray-900 dark:text-white text-sm">{contact.name}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Phone className="w-3 h-3 text-gray-400" />
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{contact.phone}</p>
-                      </div>
+                       <p className="text-xs text-gray-500 dark:text-gray-400">@{contact.username}</p>
                     </div>
                     {contact.last_seen && isOnline(contact.last_seen) && (
                       <span className="text-xs text-green-500 flex-shrink-0">online</span>
@@ -422,13 +451,38 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
                     )}
                   </div>
                 </div>
-                <div className="space-y-1 mb-6">
-                  <SettingRow label="Email" value={dbUser.email} />
-                  <SettingRow label="Phone" value={dbUser.phone} />
-                  <SettingRow label="Status" value={dbUser.status ?? "Hey there!"} />
-                  <SettingRow label="Username" value={`@${dbUser.username}`} />
-                  <SettingRow label="Contacts" value={`${dbUser.friends?.length ?? 0} people`} />
-                </div>
+                 <div className="space-y-3 mb-6">
+                   <SettingRow label="Email" value={dbUser.email} />
+                   <SettingRow label="Phone" value={dbUser.phone} />
+                   <div>
+                     <label className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">Username</label>
+                     <input
+                       value={profileUsername}
+                       onChange={e => setProfileUsername(e.target.value)}
+                       placeholder="your_username"
+                       className="mt-1 w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#128C7E]"
+                     />
+                   </div>
+                   <div>
+                     <label className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">Status</label>
+                     <textarea
+                       value={profileStatus}
+                       onChange={e => setProfileStatus(e.target.value)}
+                       maxLength={140}
+                       rows={2}
+                       placeholder="Hey there! I am using WhatsChat."
+                       className="mt-1 w-full resize-none px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#128C7E]"
+                     />
+                   </div>
+                   <button
+                     onClick={handleSaveProfile}
+                     disabled={profileSaving || !profileUsername.trim()}
+                     className="w-full py-2.5 rounded-xl bg-[#128C7E] hover:bg-[#0f7066] text-white text-sm font-medium disabled:opacity-50 transition-colors"
+                   >
+                     {profileSaving ? "Saving…" : "Save profile"}
+                   </button>
+                   <SettingRow label="Contacts" value={`${dbUser.friends?.length ?? 0} people`} />
+                 </div>
                 {!showDeleteConfirm ? (
                   <button onClick={() => setShowDeleteConfirm(true)}
                     className="w-full flex items-center justify-center gap-2 py-2.5 border border-red-200 dark:border-red-900 text-red-500 dark:text-red-400 rounded-xl text-sm font-medium hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
@@ -497,8 +551,7 @@ function UserRow({ u, isFriend, online, onChat, onAdd, adding }: UserRowProps) {
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">{u.name}</p>
           <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
-            {u.username ? `@${u.username}` : u.phone ?? ""}
-            {u.phone && u.username ? ` · ${u.phone}` : ""}
+            {u.username ? `@${u.username}` : ""}
           </p>
         </div>
       </button>

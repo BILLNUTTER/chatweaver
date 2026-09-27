@@ -4,6 +4,7 @@ import { Avatar } from "./Avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMessages, type MessageWithSender } from "@/hooks/useMessages";
 import { useConversations } from "@/hooks/useConversations";
+import { blockedMessageError, containsPhoneNumber } from "@/lib/contentPolicy";
 import { format, isToday, isYesterday } from "date-fns";
 
 interface ChatWindowProps {
@@ -20,6 +21,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
   const [replyTo, setReplyTo] = useState<MessageWithSender | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -66,9 +68,19 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
   const handleSend = async () => {
     if (!input.trim()) return;
     const content = input;
+    if (containsPhoneNumber(content)) {
+      setSendError(blockedMessageError);
+      inputRef.current?.focus();
+      return;
+    }
+    setSendError(null);
     setInput("");
     setReplyTo(null);
-    await sendMessage(content, replyTo?.id);
+    const error = await sendMessage(content, replyTo?.id);
+    if (error) {
+      setInput(content);
+      setSendError(error);
+    }
     inputRef.current?.focus();
   };
 
@@ -201,6 +213,12 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
         >
           <ChevronDown className="w-5 h-5" />
         </button>
+      )}
+
+      {sendError && (
+        <div role="alert" className="shrink-0 px-4 py-2 bg-red-50 dark:bg-red-950/30 border-t border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs font-medium">
+          {sendError}
+        </div>
       )}
 
       {/* Reply bar */}

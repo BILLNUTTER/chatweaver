@@ -7,6 +7,12 @@ const router: IRouter = Router();
 
 const now = () => new Date();
 const iso = (value: unknown) => asDate(value).toISOString();
+const phoneNumberPattern = /(?:\+?\d[\d\s().-]{5,}\d)/g;
+
+function containsPhoneNumber(content: string) {
+  return [...content.matchAll(phoneNumberPattern)]
+    .some(match => match[0].replace(/\D/g, "").length >= 7);
+}
 
 function userShape(input: Record<string, unknown>, id: string) {
   const timestamp = iso(input.created_at ?? now());
@@ -56,8 +62,6 @@ router.get("/users", async (req, res) => {
     filter.$or = [
       { name: { $regex: query, $options: "i" } },
       { username: { $regex: query, $options: "i" } },
-      { email: { $regex: query, $options: "i" } },
-      { phone: { $regex: query, $options: "i" } },
     ];
   }
   const users = await db.collection("users").find(filter).sort({ name: 1 }).limit(60).toArray();
@@ -88,11 +92,24 @@ router.post("/users", async (req, res) => {
 router.patch("/users/:id", async (req, res) => {
   const db = await getMongoDb();
   if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
-  const update: Record<string, unknown> = { ...(req.body as Record<string, unknown>), updated_at: now() };
-  delete update.id;
-  delete update.email;
-  delete update.phone;
-  delete update.password;
+  const input = req.body as Record<string, unknown>;
+  const update: Record<string, unknown> = {};
+  for (const field of ["name", "username", "status", "profile_picture", "cover_photo", "friends", "friend_requests", "sent_requests", "last_seen"]) {
+    if (field in input) update[field] = input[field];
+  }
+  if ("username" in update) {
+    const username = String(update.username ?? "").trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,}$/.test(username)) {
+      return res.status(400).json({ error: "Username must be at least 3 characters and use lowercase letters, numbers, or underscores." });
+    }
+    const duplicate = await db.collection("users").findOne({ username, id: { $ne: req.params.id } });
+    if (duplicate) return res.status(409).json({ error: "That username is already taken." });
+    update.username = username;
+  }
+  if ("status" in update && String(update.status ?? "").length > 140) {
+    return res.status(400).json({ error: "Status must be 140 characters or fewer." });
+  }
+  update.updated_at = now();
   await db.collection("users").updateOne({ id: req.params.id }, { $set: update }, { upsert: false });
   return res.json(publicUser(await db.collection("users").findOne({ id: req.params.id })));
 });
@@ -183,6 +200,10 @@ router.post("/messages", async (req, res) => {
   const db = await getMongoDb();
   if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
   const input = req.body as Record<string, unknown>;
+  const content = input.content == null ? "" : String(input.content);
+  if (containsPhoneNumber(content)) {
+    return res.status(400).json({ error: "Not Sent: this message data is not allowed in this app." });
+  }
   const createdAt = asDate(input.created_at ?? now());
   const message = {
     id: String(input.id ?? randomUUID()),
@@ -208,6 +229,9 @@ router.patch("/messages/:id", async (req, res) => {
   if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
   const update: Record<string, unknown> = { ...(req.body as Record<string, unknown>), updated_at: now() };
   delete update.id;
+  if (typeof update.content === "string" && containsPhoneNumber(update.content)) {
+    return res.status(400).json({ error: "Not Sent: this message data is not allowed in this app." });
+  }
   await db.collection("messages").updateOne({ id: req.params.id }, { $set: update });
   return res.json(cleanDocument(await db.collection("messages").findOne({ id: req.params.id })));
 });

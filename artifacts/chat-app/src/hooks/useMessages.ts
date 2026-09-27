@@ -205,8 +205,8 @@ export function useMessages(conversationId: string | null) {
     };
   }, [conversationId, user]);
 
-  const sendMessage = async (content: string, replyToId?: string) => {
-    if (!conversationId || !user || !content.trim()) return;
+  const sendMessage = async (content: string, replyToId?: string): Promise<string | null> => {
+    if (!conversationId || !user || !content.trim()) return "Message not sent.";
 
     // 1. Show message instantly (optimistic)
     const tempId = `temp-${Date.now()}-${Math.random()}`;
@@ -239,9 +239,9 @@ export function useMessages(conversationId: string | null) {
         reply_to: replyToId ?? null,
         read_by: [user.id],
       });
-    } catch {
+    } catch (error) {
       setMessages(prev => prev.filter(m => m.id !== tempId));
-      return;
+      return error instanceof Error ? error.message : "Message not sent.";
     }
     setMessages(prev => prev.map(message => message.id === tempId ? {
       ...message,
@@ -250,16 +250,21 @@ export function useMessages(conversationId: string | null) {
       _optimistic: false,
     } : message));
 
-    const conv = (await getConversations(user.id)).find(item => item.id === conversationId);
-    const otherParticipants = (conv?.participants ?? []).filter((id: string) => id !== user.id);
+    try {
+      const conv = (await getConversations(user.id)).find(item => item.id === conversationId);
+      const otherParticipants = (conv?.participants ?? []).filter((id: string) => id !== user.id);
 
-    await updateConversation(conversationId, {
-      last_message: content.trim().slice(0, 100),
-      last_message_at: new Date().toISOString(),
-      unread_by: otherParticipants,
-    });
+      await updateConversation(conversationId, {
+        last_message: content.trim().slice(0, 100),
+        last_message_at: new Date().toISOString(),
+        unread_by: otherParticipants,
+      });
+    } catch (error) {
+      console.warn("Could not update conversation preview", error);
+    }
 
     stopTyping();
+    return null;
   };
 
   const deleteMessage = async (messageId: string) => {

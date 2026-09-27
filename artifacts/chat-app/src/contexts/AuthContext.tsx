@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import type { DBUser } from "@/lib/database.types";
-import { clearMongoToken, deleteUser, getMongoToken, getStorageMode, getUser, mongoMe, updateUser } from "@/lib/storage";
+import { clearMongoToken, deleteUser, getMongoToken, getStorageMode, mongoMe, updateUser } from "@/lib/storage";
 
 interface AuthContextType {
   session: Session | null;
@@ -21,14 +21,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [dbUser, setDbUser] = useState<DBUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchDbUser = async (userId: string) => {
-    const data = await getUser(userId);
+  const fetchDbUser = async () => {
+    const token = getMongoToken();
+    if (!token) return null;
+    const data = await mongoMe(token);
     setDbUser(data ?? null);
     return data ?? null;
   };
 
   const refreshUser = async () => {
-    if (user) await fetchDbUser(user.id);
+    if (user) await fetchDbUser();
   };
 
   useEffect(() => {
