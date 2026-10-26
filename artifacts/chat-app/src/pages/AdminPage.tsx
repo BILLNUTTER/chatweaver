@@ -88,7 +88,7 @@ export default function AdminPage() {
 
   if (!session) {
     return (
-      <main className="min-h-[100dvh] bg-[#e8f3f1] dark:bg-[#101b1c] px-4 py-10 flex items-center justify-center" data-testid="admin-login-page">
+      <main className="h-[100dvh] overflow-y-auto overscroll-contain bg-[#e8f3f1] dark:bg-[#101b1c] px-4 py-10 flex items-center justify-center" data-testid="admin-login-page">
         <section className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-[#d0e2df] dark:border-[#294143] bg-[#fbfefd] dark:bg-[#172526] shadow-xl shadow-[#075e54]/10">
           <div className="bg-[#075e54] px-7 py-7 text-white">
             <div className="flex items-center gap-3">
@@ -126,8 +126,8 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-[100dvh] bg-[#edf5f3] dark:bg-[#101b1c] text-[#183332] dark:text-[#e3efed]" data-testid="admin-directory-page">
-      <header className="border-b border-[#d7e7e4] dark:border-[#294143] bg-[#f9fcfb] dark:bg-[#172526]">
+    <main className="h-[100dvh] overflow-y-auto overscroll-contain bg-[#edf5f3] dark:bg-[#101b1c] text-[#183332] dark:text-[#e3efed]" data-testid="admin-directory-page">
+      <header className="sticky top-0 z-10 border-b border-[#d7e7e4] dark:border-[#294143] bg-[#f9fcfb] dark:bg-[#172526]">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-7">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#128c7e] text-white"><ShieldCheck className="h-5 w-5" /></div>
