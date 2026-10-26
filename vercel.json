@@ -17,6 +17,27 @@
     },
     "api/messages/[id].js": {
       "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/messages/unread-counts.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/users/by-username/[username].js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/admin/auth/login.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/admin/users.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/admin/notifications.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/notifications.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/notifications/[id]/read.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
     }
   },
   "rewrites": [{ "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }]
