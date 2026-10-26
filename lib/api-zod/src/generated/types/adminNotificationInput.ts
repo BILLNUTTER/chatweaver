@@ -5,11 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminNotificationInputAudience } from './adminNotificationInputAudience';
 import type { AdminNotificationInputType } from './adminNotificationInputType';
 
 export interface AdminNotificationInput {
+  audience: AdminNotificationInputAudience;
   /** @minLength 1 */
-  recipient_id: string;
+  recipient_id?: string;
   type: AdminNotificationInputType;
   /**
      * @minLength 1

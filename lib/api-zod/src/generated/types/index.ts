@@ -6,12 +6,25 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminChatInput';
+export * from './adminChatInputAudience';
+export * from './adminChatMessage';
+export * from './adminChatMessageInput';
+export * from './adminChatMessageSenderType';
+export * from './adminChatReadResult';
+export * from './adminChatSendResult';
+export * from './adminChatThread';
+export * from './adminChatThreadLastSender';
 export * from './adminLoginInput';
 export * from './adminNotificationInput';
+export * from './adminNotificationInputAudience';
 export * from './adminNotificationInputType';
+export * from './adminSendResult';
 export * from './adminSession';
 export * from './adminUser';
 export * from './healthStatus';
+export * from './myAdminChatThread';
+export * from './myAdminChatThreadLastSender';
 export * from './publicProfile';
 export * from './systemNotification';
 export * from './systemNotificationType';

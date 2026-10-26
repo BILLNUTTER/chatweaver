@@ -89,7 +89,7 @@ export const GetAdminUsersResponse = zod.array(GetAdminUsersResponseItem)
 
 
 /**
- * @summary Send a one-way update or warning to one user
+ * @summary Send a one-way update or warning to all users or one user
  */
 
 export const sendAdminNotificationBodyTitleMax = 120;
@@ -99,10 +99,168 @@ export const sendAdminNotificationBodyContentMax = 2000;
 
 
 export const SendAdminNotificationBody = zod.object({
-  "recipient_id": zod.string().min(1),
+  "audience": zod.enum(['all', 'user']),
+  "recipient_id": zod.string().min(1).optional(),
   "type": zod.enum(['update', 'warning']),
   "title": zod.string().min(1).max(sendAdminNotificationBodyTitleMax),
   "content": zod.string().min(1).max(sendAdminNotificationBodyContentMax)
+})
+
+
+/**
+ * @summary List private admin chat threads and user responses
+ */
+export const getAdminChatsResponseUnreadForAdminMin = 0;
+
+export const getAdminChatsResponseUserReplyCountMin = 0;
+
+
+
+export const GetAdminChatsResponseItem = zod.object({
+  "id": zod.string(),
+  "campaign_id": zod.string(),
+  "recipient_id": zod.string(),
+  "recipient_name": zod.string(),
+  "recipient_username": zod.string(),
+  "recipient_profile_picture": zod.string().nullable(),
+  "title": zod.string(),
+  "allow_replies": zod.boolean(),
+  "last_message": zod.string(),
+  "last_sender": zod.enum(['admin', 'user']),
+  "last_message_at": zod.coerce.date(),
+  "unread_for_admin": zod.number().min(getAdminChatsResponseUnreadForAdminMin),
+  "user_reply_count": zod.number().min(getAdminChatsResponseUserReplyCountMin),
+  "created_at": zod.coerce.date()
+})
+export const GetAdminChatsResponse = zod.array(GetAdminChatsResponseItem)
+
+
+/**
+ * @summary Start a private admin chat with all users or one user
+ */
+
+export const sendAdminChatBodyTitleMax = 120;
+
+export const sendAdminChatBodyContentMax = 2000;
+
+
+
+export const SendAdminChatBody = zod.object({
+  "audience": zod.enum(['all', 'user']),
+  "recipient_id": zod.string().min(1).optional(),
+  "title": zod.string().min(1).max(sendAdminChatBodyTitleMax),
+  "content": zod.string().min(1).max(sendAdminChatBodyContentMax),
+  "allow_replies": zod.boolean()
+})
+
+
+/**
+ * @summary Read messages in an admin chat thread
+ */
+export const GetAdminChatMessagesParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetAdminChatMessagesResponseItem = zod.object({
+  "id": zod.string(),
+  "thread_id": zod.string(),
+  "sender_type": zod.enum(['admin', 'user']),
+  "content": zod.string(),
+  "created_at": zod.coerce.date()
+})
+export const GetAdminChatMessagesResponse = zod.array(GetAdminChatMessagesResponseItem)
+
+
+/**
+ * @summary Reply to a user in an admin chat
+ */
+export const SendAdminChatMessageParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const sendAdminChatMessageBodyContentMax = 2000;
+
+
+
+export const SendAdminChatMessageBody = zod.object({
+  "content": zod.string().min(1).max(sendAdminChatMessageBodyContentMax)
+})
+
+
+/**
+ * @summary Mark user responses in a thread as reviewed
+ */
+export const MarkAdminChatReadParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const MarkAdminChatReadResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary List private WhatsChat messages for the signed-in user
+ */
+export const getMyAdminChatsResponseUnreadCountMin = 0;
+
+
+
+export const GetMyAdminChatsResponseItem = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "allow_replies": zod.boolean(),
+  "last_message": zod.string(),
+  "last_sender": zod.enum(['admin', 'user']),
+  "last_message_at": zod.coerce.date(),
+  "unread_count": zod.number().min(getMyAdminChatsResponseUnreadCountMin),
+  "created_at": zod.coerce.date()
+})
+export const GetMyAdminChatsResponse = zod.array(GetMyAdminChatsResponseItem)
+
+
+/**
+ * @summary Read messages in the signed-in user's admin chat
+ */
+export const GetMyAdminChatMessagesParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetMyAdminChatMessagesResponseItem = zod.object({
+  "id": zod.string(),
+  "thread_id": zod.string(),
+  "sender_type": zod.enum(['admin', 'user']),
+  "content": zod.string(),
+  "created_at": zod.coerce.date()
+})
+export const GetMyAdminChatMessagesResponse = zod.array(GetMyAdminChatMessagesResponseItem)
+
+
+/**
+ * @summary Reply when the administrator has enabled responses
+ */
+export const SendMyAdminChatMessageParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const sendMyAdminChatMessageBodyContentMax = 2000;
+
+
+
+export const SendMyAdminChatMessageBody = zod.object({
+  "content": zod.string().min(1).max(sendMyAdminChatMessageBodyContentMax)
+})
+
+
+/**
+ * @summary Mark an admin chat as read
+ */
+export const MarkMyAdminChatReadParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const MarkMyAdminChatReadResponse = zod.object({
+  "ok": zod.boolean()
 })
 
 

@@ -20,11 +20,19 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminChatInput,
+  AdminChatMessage,
+  AdminChatMessageInput,
+  AdminChatReadResult,
+  AdminChatSendResult,
+  AdminChatThread,
   AdminLoginInput,
   AdminNotificationInput,
+  AdminSendResult,
   AdminSession,
   AdminUser,
   HealthStatus,
+  MyAdminChatThread,
   PublicProfile,
   SystemNotification,
   UnreadMessageCount
@@ -431,11 +439,11 @@ export const getSendAdminNotificationUrl = () => {
 }
 
 /**
- * @summary Send a one-way update or warning to one user
+ * @summary Send a one-way update or warning to all users or one user
  */
-export const sendAdminNotification = async (adminNotificationInput: AdminNotificationInput, options?: RequestInit): Promise<SystemNotification> => {
+export const sendAdminNotification = async (adminNotificationInput: AdminNotificationInput, options?: RequestInit): Promise<AdminSendResult> => {
 
-  return customFetch<SystemNotification>(getSendAdminNotificationUrl(),
+  return customFetch<AdminSendResult>(getSendAdminNotificationUrl(),
   {
     ...options,
     method: 'POST',
@@ -480,7 +488,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SendAdminNotificationMutationError = ErrorType<void>
 
     /**
- * @summary Send a one-way update or warning to one user
+ * @summary Send a one-way update or warning to all users or one user
  */
 export const useSendAdminNotification = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAdminNotification>>, TError,{data: BodyType<AdminNotificationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -491,6 +499,669 @@ export const useSendAdminNotification = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getSendAdminNotificationMutationOptions(options));
+    }
+
+export const getGetAdminChatsUrl = () => {
+
+
+
+
+  return `/api/admin/chats`
+}
+
+/**
+ * @summary List private admin chat threads and user responses
+ */
+export const getAdminChats = async ( options?: RequestInit): Promise<AdminChatThread[]> => {
+
+  return customFetch<AdminChatThread[]>(getGetAdminChatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminChatsQueryKey = () => {
+    return [
+    `/api/admin/chats`
+    ] as const;
+    }
+
+
+export const getGetAdminChatsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminChats>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminChats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminChatsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminChats>>> = ({ signal }) => getAdminChats({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminChats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminChatsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminChats>>>
+export type GetAdminChatsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List private admin chat threads and user responses
+ */
+
+export function useGetAdminChats<TData = Awaited<ReturnType<typeof getAdminChats>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminChats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminChatsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSendAdminChatUrl = () => {
+
+
+
+
+  return `/api/admin/chats`
+}
+
+/**
+ * @summary Start a private admin chat with all users or one user
+ */
+export const sendAdminChat = async (adminChatInput: AdminChatInput, options?: RequestInit): Promise<AdminChatSendResult> => {
+
+  return customFetch<AdminChatSendResult>(getSendAdminChatUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      adminChatInput,)
+  }
+);}
+
+
+
+
+export const getSendAdminChatMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAdminChat>>, TError,{data: BodyType<AdminChatInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendAdminChat>>, TError,{data: BodyType<AdminChatInput>}, TContext> => {
+
+const mutationKey = ['sendAdminChat'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendAdminChat>>, {data: BodyType<AdminChatInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  sendAdminChat(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendAdminChatMutationResult = NonNullable<Awaited<ReturnType<typeof sendAdminChat>>>
+    export type SendAdminChatMutationBody = BodyType<AdminChatInput>
+    export type SendAdminChatMutationError = ErrorType<void>
+
+    /**
+ * @summary Start a private admin chat with all users or one user
+ */
+export const useSendAdminChat = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAdminChat>>, TError,{data: BodyType<AdminChatInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendAdminChat>>,
+        TError,
+        {data: BodyType<AdminChatInput>},
+        TContext
+      > => {
+      return useMutation(getSendAdminChatMutationOptions(options));
+    }
+
+export const getGetAdminChatMessagesUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin/chats/${id}/messages`
+}
+
+/**
+ * @summary Read messages in an admin chat thread
+ */
+export const getAdminChatMessages = async (id: string, options?: RequestInit): Promise<AdminChatMessage[]> => {
+
+  return customFetch<AdminChatMessage[]>(getGetAdminChatMessagesUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminChatMessagesQueryKey = (id: string,) => {
+    return [
+    `/api/admin/chats/${id}/messages`
+    ] as const;
+    }
+
+
+export const getGetAdminChatMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getAdminChatMessages>>, TError = ErrorType<void>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminChatMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminChatMessagesQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminChatMessages>>> = ({ signal }) => getAdminChatMessages(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminChatMessages>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminChatMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminChatMessages>>>
+export type GetAdminChatMessagesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read messages in an admin chat thread
+ */
+
+export function useGetAdminChatMessages<TData = Awaited<ReturnType<typeof getAdminChatMessages>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminChatMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminChatMessagesQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSendAdminChatMessageUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin/chats/${id}/messages`
+}
+
+/**
+ * @summary Reply to a user in an admin chat
+ */
+export const sendAdminChatMessage = async (id: string,
+    adminChatMessageInput: AdminChatMessageInput, options?: RequestInit): Promise<AdminChatMessage> => {
+
+  return customFetch<AdminChatMessage>(getSendAdminChatMessageUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      adminChatMessageInput,)
+  }
+);}
+
+
+
+
+export const getSendAdminChatMessageMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAdminChatMessage>>, TError,{id: string;data: BodyType<AdminChatMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendAdminChatMessage>>, TError,{id: string;data: BodyType<AdminChatMessageInput>}, TContext> => {
+
+const mutationKey = ['sendAdminChatMessage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendAdminChatMessage>>, {id: string;data: BodyType<AdminChatMessageInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendAdminChatMessage(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendAdminChatMessageMutationResult = NonNullable<Awaited<ReturnType<typeof sendAdminChatMessage>>>
+    export type SendAdminChatMessageMutationBody = BodyType<AdminChatMessageInput>
+    export type SendAdminChatMessageMutationError = ErrorType<void>
+
+    /**
+ * @summary Reply to a user in an admin chat
+ */
+export const useSendAdminChatMessage = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAdminChatMessage>>, TError,{id: string;data: BodyType<AdminChatMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendAdminChatMessage>>,
+        TError,
+        {id: string;data: BodyType<AdminChatMessageInput>},
+        TContext
+      > => {
+      return useMutation(getSendAdminChatMessageMutationOptions(options));
+    }
+
+export const getMarkAdminChatReadUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin/chats/${id}/read`
+}
+
+/**
+ * @summary Mark user responses in a thread as reviewed
+ */
+export const markAdminChatRead = async (id: string, options?: RequestInit): Promise<AdminChatReadResult> => {
+
+  return customFetch<AdminChatReadResult>(getMarkAdminChatReadUrl(id),
+  {
+    ...options,
+    method: 'PATCH'
+
+
+  }
+);}
+
+
+
+
+export const getMarkAdminChatReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAdminChatRead>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markAdminChatRead>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['markAdminChatRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markAdminChatRead>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  markAdminChatRead(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkAdminChatReadMutationResult = NonNullable<Awaited<ReturnType<typeof markAdminChatRead>>>
+
+    export type MarkAdminChatReadMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark user responses in a thread as reviewed
+ */
+export const useMarkAdminChatRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markAdminChatRead>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markAdminChatRead>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getMarkAdminChatReadMutationOptions(options));
+    }
+
+export const getGetMyAdminChatsUrl = () => {
+
+
+
+
+  return `/api/admin-chats`
+}
+
+/**
+ * @summary List private WhatsChat messages for the signed-in user
+ */
+export const getMyAdminChats = async ( options?: RequestInit): Promise<MyAdminChatThread[]> => {
+
+  return customFetch<MyAdminChatThread[]>(getGetMyAdminChatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyAdminChatsQueryKey = () => {
+    return [
+    `/api/admin-chats`
+    ] as const;
+    }
+
+
+export const getGetMyAdminChatsQueryOptions = <TData = Awaited<ReturnType<typeof getMyAdminChats>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyAdminChats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyAdminChatsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyAdminChats>>> = ({ signal }) => getMyAdminChats({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyAdminChats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyAdminChatsQueryResult = NonNullable<Awaited<ReturnType<typeof getMyAdminChats>>>
+export type GetMyAdminChatsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List private WhatsChat messages for the signed-in user
+ */
+
+export function useGetMyAdminChats<TData = Awaited<ReturnType<typeof getMyAdminChats>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyAdminChats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyAdminChatsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetMyAdminChatMessagesUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin-chats/${id}/messages`
+}
+
+/**
+ * @summary Read messages in the signed-in user's admin chat
+ */
+export const getMyAdminChatMessages = async (id: string, options?: RequestInit): Promise<AdminChatMessage[]> => {
+
+  return customFetch<AdminChatMessage[]>(getGetMyAdminChatMessagesUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyAdminChatMessagesQueryKey = (id: string,) => {
+    return [
+    `/api/admin-chats/${id}/messages`
+    ] as const;
+    }
+
+
+export const getGetMyAdminChatMessagesQueryOptions = <TData = Awaited<ReturnType<typeof getMyAdminChatMessages>>, TError = ErrorType<void>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyAdminChatMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyAdminChatMessagesQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyAdminChatMessages>>> = ({ signal }) => getMyAdminChatMessages(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyAdminChatMessages>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyAdminChatMessagesQueryResult = NonNullable<Awaited<ReturnType<typeof getMyAdminChatMessages>>>
+export type GetMyAdminChatMessagesQueryError = ErrorType<void>
+
+
+/**
+ * @summary Read messages in the signed-in user's admin chat
+ */
+
+export function useGetMyAdminChatMessages<TData = Awaited<ReturnType<typeof getMyAdminChatMessages>>, TError = ErrorType<void>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyAdminChatMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyAdminChatMessagesQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSendMyAdminChatMessageUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin-chats/${id}/messages`
+}
+
+/**
+ * @summary Reply when the administrator has enabled responses
+ */
+export const sendMyAdminChatMessage = async (id: string,
+    adminChatMessageInput: AdminChatMessageInput, options?: RequestInit): Promise<AdminChatMessage> => {
+
+  return customFetch<AdminChatMessage>(getSendMyAdminChatMessageUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      adminChatMessageInput,)
+  }
+);}
+
+
+
+
+export const getSendMyAdminChatMessageMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendMyAdminChatMessage>>, TError,{id: string;data: BodyType<AdminChatMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendMyAdminChatMessage>>, TError,{id: string;data: BodyType<AdminChatMessageInput>}, TContext> => {
+
+const mutationKey = ['sendMyAdminChatMessage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendMyAdminChatMessage>>, {id: string;data: BodyType<AdminChatMessageInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendMyAdminChatMessage(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendMyAdminChatMessageMutationResult = NonNullable<Awaited<ReturnType<typeof sendMyAdminChatMessage>>>
+    export type SendMyAdminChatMessageMutationBody = BodyType<AdminChatMessageInput>
+    export type SendMyAdminChatMessageMutationError = ErrorType<void>
+
+    /**
+ * @summary Reply when the administrator has enabled responses
+ */
+export const useSendMyAdminChatMessage = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendMyAdminChatMessage>>, TError,{id: string;data: BodyType<AdminChatMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendMyAdminChatMessage>>,
+        TError,
+        {id: string;data: BodyType<AdminChatMessageInput>},
+        TContext
+      > => {
+      return useMutation(getSendMyAdminChatMessageMutationOptions(options));
+    }
+
+export const getMarkMyAdminChatReadUrl = (id: string,) => {
+
+
+
+
+  return `/api/admin-chats/${id}/read`
+}
+
+/**
+ * @summary Mark an admin chat as read
+ */
+export const markMyAdminChatRead = async (id: string, options?: RequestInit): Promise<AdminChatReadResult> => {
+
+  return customFetch<AdminChatReadResult>(getMarkMyAdminChatReadUrl(id),
+  {
+    ...options,
+    method: 'PATCH'
+
+
+  }
+);}
+
+
+
+
+export const getMarkMyAdminChatReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markMyAdminChatRead>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markMyAdminChatRead>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['markMyAdminChatRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markMyAdminChatRead>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  markMyAdminChatRead(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkMyAdminChatReadMutationResult = NonNullable<Awaited<ReturnType<typeof markMyAdminChatRead>>>
+
+    export type MarkMyAdminChatReadMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark an admin chat as read
+ */
+export const useMarkMyAdminChatRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markMyAdminChatRead>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markMyAdminChatRead>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getMarkMyAdminChatReadMutationOptions(options));
     }
 
 export const getGetMyNotificationsUrl = () => {

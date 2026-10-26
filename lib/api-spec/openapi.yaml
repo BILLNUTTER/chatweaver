@@ -114,7 +114,7 @@ paths:
     post:
       operationId: sendAdminNotification
       tags: [admin]
-      summary: Send a one-way update or warning to one user
+      summary: Send a one-way update or warning to all users or one user
       security:
         - bearerAuth: []
       requestBody:
@@ -125,17 +125,240 @@ paths:
               $ref: "#/components/schemas/AdminNotificationInput"
       responses:
         "201":
-          description: Notification created
+          description: Notice delivered to the selected audience
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SystemNotification"
+                $ref: "#/components/schemas/AdminSendResult"
         "400":
           description: Invalid notification
         "401":
           description: Invalid administrator session
         "404":
           description: User not found
+  /admin/chats:
+    get:
+      operationId: getAdminChats
+      tags: [admin]
+      summary: List private admin chat threads and user responses
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Admin chat threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminChatThread"
+        "401":
+          description: Invalid administrator session
+    post:
+      operationId: sendAdminChat
+      tags: [admin]
+      summary: Start a private admin chat with all users or one user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminChatInput"
+      responses:
+        "201":
+          description: Private threads created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminChatSendResult"
+        "400":
+          description: Invalid admin chat
+        "401":
+          description: Invalid administrator session
+        "404":
+          description: User not found
+  /admin/chats/{id}/messages:
+    get:
+      operationId: getAdminChatMessages
+      tags: [admin]
+      summary: Read messages in an admin chat thread
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Thread messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminChatMessage"
+        "401":
+          description: Invalid administrator session
+        "404":
+          description: Thread not found
+    post:
+      operationId: sendAdminChatMessage
+      tags: [admin]
+      summary: Reply to a user in an admin chat
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminChatMessageInput"
+      responses:
+        "201":
+          description: Reply sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminChatMessage"
+        "400":
+          description: Invalid reply
+        "401":
+          description: Invalid administrator session
+        "404":
+          description: Thread not found
+  /admin/chats/{id}/read:
+    patch:
+      operationId: markAdminChatRead
+      tags: [admin]
+      summary: Mark user responses in a thread as reviewed
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Read state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminChatReadResult"
+        "401":
+          description: Invalid administrator session
+        "404":
+          description: Thread not found
+  /admin-chats:
+    get:
+      operationId: getMyAdminChats
+      tags: [admin-chats]
+      summary: List private WhatsChat messages for the signed-in user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User's admin chat threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MyAdminChatThread"
+        "401":
+          description: Invalid session
+  /admin-chats/{id}/messages:
+    get:
+      operationId: getMyAdminChatMessages
+      tags: [admin-chats]
+      summary: Read messages in the signed-in user's admin chat
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Thread messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminChatMessage"
+        "401":
+          description: Invalid session
+        "404":
+          description: Thread not found
+    post:
+      operationId: sendMyAdminChatMessage
+      tags: [admin-chats]
+      summary: Reply when the administrator has enabled responses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminChatMessageInput"
+      responses:
+        "201":
+          description: Reply sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminChatMessage"
+        "400":
+          description: Replies are disabled or message is invalid
+        "401":
+          description: Invalid session
+        "404":
+          description: Thread not found
+  /admin-chats/{id}/read:
+    patch:
+      operationId: markMyAdminChatRead
+      tags: [admin-chats]
+      summary: Mark an admin chat as read
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Read state updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminChatReadResult"
+        "401":
+          description: Invalid session
+        "404":
+          description: Thread not found
   /notifications:
     get:
       operationId: getMyNotifications
@@ -237,12 +460,82 @@ components:
         is_admin: { type: boolean }
     AdminNotificationInput:
       type: object
-      required: [recipient_id, type, title, content]
+      required: [audience, type, title, content]
       properties:
+        audience: { type: string, enum: [all, user] }
         recipient_id: { type: string, minLength: 1 }
         type: { type: string, enum: [update, warning] }
         title: { type: string, minLength: 1, maxLength: 120 }
         content: { type: string, minLength: 1, maxLength: 2000 }
+    AdminSendResult:
+      type: object
+      required: [sent]
+      properties:
+        sent: { type: integer, minimum: 0 }
+    AdminChatInput:
+      type: object
+      required: [audience, title, content, allow_replies]
+      properties:
+        audience: { type: string, enum: [all, user] }
+        recipient_id: { type: string, minLength: 1 }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        content: { type: string, minLength: 1, maxLength: 2000 }
+        allow_replies: { type: boolean }
+    AdminChatSendResult:
+      type: object
+      required: [campaign_id, sent]
+      properties:
+        campaign_id: { type: string }
+        sent: { type: integer, minimum: 0 }
+    AdminChatThread:
+      type: object
+      required: [id, campaign_id, recipient_id, recipient_name, recipient_username, recipient_profile_picture, title, allow_replies, last_message, last_sender, last_message_at, unread_for_admin, user_reply_count, created_at]
+      properties:
+        id: { type: string }
+        campaign_id: { type: string }
+        recipient_id: { type: string }
+        recipient_name: { type: string }
+        recipient_username: { type: string }
+        recipient_profile_picture: { type: ["string", "null"] }
+        title: { type: string }
+        allow_replies: { type: boolean }
+        last_message: { type: string }
+        last_sender: { type: string, enum: [admin, user] }
+        last_message_at: { type: string, format: date-time }
+        unread_for_admin: { type: integer, minimum: 0 }
+        user_reply_count: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+    MyAdminChatThread:
+      type: object
+      required: [id, title, allow_replies, last_message, last_sender, last_message_at, unread_count, created_at]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        allow_replies: { type: boolean }
+        last_message: { type: string }
+        last_sender: { type: string, enum: [admin, user] }
+        last_message_at: { type: string, format: date-time }
+        unread_count: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+    AdminChatMessageInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1, maxLength: 2000 }
+    AdminChatMessage:
+      type: object
+      required: [id, thread_id, sender_type, content, created_at]
+      properties:
+        id: { type: string }
+        thread_id: { type: string }
+        sender_type: { type: string, enum: [admin, user] }
+        content: { type: string }
+        created_at: { type: string, format: date-time }
+    AdminChatReadResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
     SystemNotification:
       type: object
       required: [id, recipient_id, type, title, content, read, created_at, updated_at]

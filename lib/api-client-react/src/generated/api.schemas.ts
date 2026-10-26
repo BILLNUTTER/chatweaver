@@ -62,6 +62,14 @@ export interface AdminUser {
   is_admin: boolean;
 }
 
+export type AdminNotificationInputAudience = typeof AdminNotificationInputAudience[keyof typeof AdminNotificationInputAudience];
+
+
+export const AdminNotificationInputAudience = {
+  all: 'all',
+  user: 'user',
+} as const;
+
 export type AdminNotificationInputType = typeof AdminNotificationInputType[keyof typeof AdminNotificationInputType];
 
 
@@ -71,8 +79,9 @@ export const AdminNotificationInputType = {
 } as const;
 
 export interface AdminNotificationInput {
+  audience: AdminNotificationInputAudience;
   /** @minLength 1 */
-  recipient_id: string;
+  recipient_id?: string;
   type: AdminNotificationInputType;
   /**
      * @minLength 1
@@ -84,6 +93,118 @@ export interface AdminNotificationInput {
      * @maxLength 2000
      */
   content: string;
+}
+
+export interface AdminSendResult {
+  /** @minimum 0 */
+  sent: number;
+}
+
+export type AdminChatInputAudience = typeof AdminChatInputAudience[keyof typeof AdminChatInputAudience];
+
+
+export const AdminChatInputAudience = {
+  all: 'all',
+  user: 'user',
+} as const;
+
+export interface AdminChatInput {
+  audience: AdminChatInputAudience;
+  /** @minLength 1 */
+  recipient_id?: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  title: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  content: string;
+  allow_replies: boolean;
+}
+
+export interface AdminChatSendResult {
+  campaign_id: string;
+  /** @minimum 0 */
+  sent: number;
+}
+
+export type AdminChatThreadLastSender = typeof AdminChatThreadLastSender[keyof typeof AdminChatThreadLastSender];
+
+
+export const AdminChatThreadLastSender = {
+  admin: 'admin',
+  user: 'user',
+} as const;
+
+export interface AdminChatThread {
+  id: string;
+  campaign_id: string;
+  recipient_id: string;
+  recipient_name: string;
+  recipient_username: string;
+  /** @nullable */
+  recipient_profile_picture: string | null;
+  title: string;
+  allow_replies: boolean;
+  last_message: string;
+  last_sender: AdminChatThreadLastSender;
+  last_message_at: string;
+  /** @minimum 0 */
+  unread_for_admin: number;
+  /** @minimum 0 */
+  user_reply_count: number;
+  created_at: string;
+}
+
+export type MyAdminChatThreadLastSender = typeof MyAdminChatThreadLastSender[keyof typeof MyAdminChatThreadLastSender];
+
+
+export const MyAdminChatThreadLastSender = {
+  admin: 'admin',
+  user: 'user',
+} as const;
+
+export interface MyAdminChatThread {
+  id: string;
+  title: string;
+  allow_replies: boolean;
+  last_message: string;
+  last_sender: MyAdminChatThreadLastSender;
+  last_message_at: string;
+  /** @minimum 0 */
+  unread_count: number;
+  created_at: string;
+}
+
+export interface AdminChatMessageInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  content: string;
+}
+
+export type AdminChatMessageSenderType = typeof AdminChatMessageSenderType[keyof typeof AdminChatMessageSenderType];
+
+
+export const AdminChatMessageSenderType = {
+  admin: 'admin',
+  user: 'user',
+} as const;
+
+export interface AdminChatMessage {
+  id: string;
+  thread_id: string;
+  sender_type: AdminChatMessageSenderType;
+  content: string;
+  created_at: string;
+}
+
+export interface AdminChatReadResult {
+  ok: boolean;
 }
 
 export type SystemNotificationType = typeof SystemNotificationType[keyof typeof SystemNotificationType];
