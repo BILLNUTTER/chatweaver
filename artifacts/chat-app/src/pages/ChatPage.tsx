@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatWindow } from "@/components/ChatWindow";
 import { EmptyState } from "@/components/EmptyState";
+import { useConversations } from "@/hooks/useConversations";
 
 export default function ChatPage() {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const { conversations, loading, refetch, markConversationRead, updateConversationPreview } = useConversations();
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -51,6 +53,10 @@ export default function ChatPage() {
         <Sidebar
           selectedConversationId={selectedConversationId}
           onSelectConversation={handleSelectConversation}
+          conversations={conversations}
+          conversationsLoading={loading}
+          markConversationRead={markConversationRead}
+          refetchConversations={refetch}
         />
       </div>
 
@@ -61,6 +67,8 @@ export default function ChatPage() {
         {selectedConversationId ? (
           <ChatWindow
             conversationId={selectedConversationId}
+            conversation={conversations.find(conversation => conversation.id === selectedConversationId) ?? null}
+            onConversationActivity={updateConversationPreview}
             onBack={handleBack}
           />
         ) : (

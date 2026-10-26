@@ -3,18 +3,19 @@ import { Search, MoreVertical, Send, Paperclip, Image, X, Reply, Trash2, Chevron
 import { Avatar } from "./Avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMessages, type MessageWithSender } from "@/hooks/useMessages";
-import { useConversations } from "@/hooks/useConversations";
+import type { ConversationWithDetails } from "@/hooks/useConversations";
 import { blockedMessageError, containsPhoneNumber } from "@/lib/contentPolicy";
 import { format, isToday, isYesterday } from "date-fns";
 
 interface ChatWindowProps {
   conversationId: string;
+  conversation: ConversationWithDetails | null;
+  onConversationActivity?: (id: string, preview: string, createdAt: string) => void;
   onBack?: () => void;
 }
 
-export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
+export function ChatWindow({ conversationId, conversation, onConversationActivity, onBack }: ChatWindowProps) {
   const { user } = useAuth();
-  const { conversations } = useConversations();
   const { messages, loading, typingUsers, sendMessage, deleteMessage, startTyping, stopTyping } = useMessages(conversationId);
 
   const [input, setInput] = useState("");
@@ -34,7 +35,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const chatSearchRef = useRef<HTMLInputElement>(null);
 
-  const conv = conversations.find(c => c.id === conversationId);
+  const conv = conversation;
   const otherUser = conv?.other_user;
   const chatName = conv?.is_group ? (conv.group_name ?? "Group") : (otherUser?.name ?? "Unknown");
   const chatPic = conv?.is_group ? conv.group_photo : otherUser?.profile_picture;
@@ -97,6 +98,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
       setSendError(error);
     } else {
       setSelectedFile(null);
+      onConversationActivity?.(conversationId, content.trim().slice(0, 100), new Date().toISOString());
     }
     inputRef.current?.focus();
   };
@@ -158,7 +160,10 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
   return (
     <div className="flex-1 min-w-0 flex flex-col h-full max-h-full min-h-0 overflow-hidden bg-[#efeae2] dark:bg-gray-950 relative">
       {/* Header is fixed to the mobile viewport so keyboard focus cannot pan it away. */}
-      <div className="absolute inset-x-0 top-0 z-40 h-16 flex-none px-3 bg-[#f0f2f5] dark:bg-gray-900 flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 shadow-sm md:relative md:inset-auto md:h-16">
+      <div
+        className="chat-mobile-header z-40 h-16 flex-none px-3 bg-[#f0f2f5] dark:bg-gray-900 flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 shadow-sm"
+        style={{ top: "var(--chat-viewport-top, 0px)" }}
+      >
         {/* Back button — mobile only */}
         {onBack && (
           <button
@@ -263,6 +268,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
                       showAvatar={showAvatar}
                       isConsecutive={isConsecutive}
                       isGroup={conv?.is_group ?? false}
+                      recipientOnline={!conv?.is_group && conv?.other_user ? isOnline(conv.other_user.last_seen) : false}
                       isHovered={hoveredId === msg.id}
                       onHover={setHoveredId}
                       onReply={setReplyTo}
@@ -379,13 +385,14 @@ interface BubbleProps {
   showAvatar: boolean;
   isConsecutive: boolean;
   isGroup: boolean;
+  recipientOnline: boolean;
   isHovered: boolean;
   onHover: (id: string | null) => void;
   onReply: (msg: MessageWithSender) => void;
   onDelete: (id: string) => void;
 }
 
-function MessageBubble({ msg, isMe, showAvatar, isConsecutive, isGroup, isHovered, onHover, onReply, onDelete }: BubbleProps) {
+function MessageBubble({ msg, isMe, showAvatar, isConsecutive, isGroup, recipientOnline, isHovered, onHover, onReply, onDelete }: BubbleProps) {
   const isDeleted = msg.content === null && msg.is_edited;
   const isSystem = msg.is_system;
 
@@ -470,12 +477,22 @@ function MessageBubble({ msg, isMe, showAvatar, isConsecutive, isGroup, isHovere
                 ? <Clock className="w-3 h-3 text-gray-400" />
                 : isRead
                   ? <DoubleTick blue />
-                  : <DoubleTick />
+                  : !isGroup && !recipientOnline
+                    ? <SingleTick />
+                    : <DoubleTick />
             )}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function SingleTick() {
+  return (
+    <svg width="10" height="11" viewBox="0 0 10 11" className="inline-block flex-shrink-0">
+      <path d="M1 5.5L4.5 9L9 2" stroke="#8696a0" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
   );
 }
 

@@ -204,6 +204,19 @@
     overscroll-behavior: none;
   }
 
+  .chat-mobile-header {
+    position: fixed;
+    inset-inline: 0;
+  }
+
+  @media (min-width: 768px) {
+    .chat-mobile-header {
+      position: relative;
+      inset-inline: auto;
+      top: auto !important;
+    }
+  }
+
   html,
   body,
   #root {

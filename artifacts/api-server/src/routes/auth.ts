@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { getMongoDb, isMongoConfigured, privateUser } from "../lib/mongo";
+import { readSessionUserId } from "../lib/session";
 
 const router: IRouter = Router();
 const sessionSecret = process.env.SESSION_SECRET;
@@ -28,22 +29,6 @@ function createToken(userId: string) {
   })).toString("base64url");
   const signature = createHmac("sha256", sessionSecret).update(payload).digest("base64url");
   return `${payload}.${signature}`;
-}
-
-function readToken(request: { headers: { authorization?: string } }) {
-  if (!sessionSecret) return null;
-  const token = request.headers.authorization?.replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const [payload, signature] = token.split(".");
-  if (!payload || !signature) return null;
-  const expected = createHmac("sha256", sessionSecret).update(payload).digest("base64url");
-  if (signature.length !== expected.length || !timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
-  try {
-    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString()) as { sub?: string; exp?: number };
-    return decoded.sub && decoded.exp && decoded.exp > Math.floor(Date.now() / 1000) ? decoded.sub : null;
-  } catch {
-    return null;
-  }
 }
 
 function profileFromInput(input: Record<string, unknown>, id: string, passwordHash: string) {
@@ -129,7 +114,7 @@ router.post("/auth/login", async (req, res) => {
 
 router.get("/auth/me", async (req, res) => {
   const db = await getMongoDb();
-  const userId = readToken(req);
+  const userId = readSessionUserId(req);
   if (!db || !userId) return res.status(401).json({ error: "Invalid session" });
   return res.json(privateUser(await db.collection("users").findOne({ id: userId })));
 });

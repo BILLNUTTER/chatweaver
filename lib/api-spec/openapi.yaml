@@ -10,6 +10,14 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: profiles
+    description: Public user profiles
+  - name: admin
+    description: Protected administrator operations
+  - name: notifications
+    description: Read-only system notices
+  - name: conversations
+    description: Conversation data
 paths:
   /healthz:
     get:
@@ -24,7 +32,157 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /users/by-username/{username}:
+    get:
+      operationId: getPublicProfileByUsername
+      tags: [profiles]
+      summary: Get a public profile by username
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicProfile"
+        "404":
+          description: User not found
+  /messages/unread-counts:
+    get:
+      operationId: getUnreadMessageCounts
+      tags: [conversations]
+      summary: Get unread message counts for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Unread counts grouped by conversation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UnreadMessageCount"
+        "401":
+          description: Invalid session
+  /admin/auth/login:
+    post:
+      operationId: adminLogin
+      tags: [admin]
+      summary: Sign in to the protected administrator dashboard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginInput"
+      responses:
+        "200":
+          description: Administrator session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+        "401":
+          description: Invalid credentials
+        "503":
+          description: Admin credentials are not configured
+  /admin/users:
+    get:
+      operationId: getAdminUsers
+      tags: [admin]
+      summary: List public profile details for all users
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User directory for administration
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+        "401":
+          description: Invalid administrator session
+  /admin/notifications:
+    post:
+      operationId: sendAdminNotification
+      tags: [admin]
+      summary: Send a one-way update or warning to one user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminNotificationInput"
+      responses:
+        "201":
+          description: Notification created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemNotification"
+        "400":
+          description: Invalid notification
+        "401":
+          description: Invalid administrator session
+        "404":
+          description: User not found
+  /notifications:
+    get:
+      operationId: getMyNotifications
+      tags: [notifications]
+      summary: List system notices for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: System notices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SystemNotification"
+        "401":
+          description: Invalid session
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark an owned system notice as read
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated notice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemNotification"
+        "401":
+          description: Invalid session
+        "404":
+          description: Notice not found
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +191,68 @@ components:
           type: string
       required:
         - status
+    PublicProfile:
+      type: object
+      required: [id, name, username, profile_picture, cover_photo, status, last_seen, is_verified, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        username: { type: string }
+        profile_picture: { type: ["string", "null"] }
+        cover_photo: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        last_seen: { type: string, format: date-time }
+        is_verified: { type: boolean }
+        created_at: { type: string, format: date-time }
+    UnreadMessageCount:
+      type: object
+      required: [conversation_id, count]
+      properties:
+        conversation_id: { type: string }
+        count: { type: integer, minimum: 0 }
+    AdminLoginInput:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 120 }
+        password: { type: string, minLength: 1, maxLength: 256 }
+    AdminSession:
+      type: object
+      required: [token, username, expires_at]
+      properties:
+        token: { type: string }
+        username: { type: string }
+        expires_at: { type: string, format: date-time }
+    AdminUser:
+      type: object
+      required: [id, name, username, profile_picture, status, last_seen, created_at, is_admin]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        username: { type: string }
+        profile_picture: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        last_seen: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        is_admin: { type: boolean }
+    AdminNotificationInput:
+      type: object
+      required: [recipient_id, type, title, content]
+      properties:
+        recipient_id: { type: string, minLength: 1 }
+        type: { type: string, enum: [update, warning] }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        content: { type: string, minLength: 1, maxLength: 2000 }
+    SystemNotification:
+      type: object
+      required: [id, recipient_id, type, title, content, read, created_at, updated_at]
+      properties:
+        id: { type: string }
+        recipient_id: { type: string }
+        type: { type: string, enum: [update, warning] }
+        title: { type: string }
+        content: { type: string }
+        read: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 

@@ -27,6 +27,7 @@ export async function getMongoDb(): Promise<Db | null> {
       await db.command({ ping: 1 });
       await Promise.all([
         db.collection("messages").createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 }),
+        db.collection("messages").createIndex({ conversation_id: 1, sender_id: 1, expires_at: 1 }),
         db.collection("users").createIndex({ email: 1 }, { unique: true, sparse: true }),
         db.collection("users").createIndex({ username: 1 }, { unique: true, sparse: true }),
       ]);

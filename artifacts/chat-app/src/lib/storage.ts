@@ -1,4 +1,6 @@
 import type { DBConversation, DBMessage, DBUser } from "./database.types";
+import { getUnreadMessageCounts as fetchUnreadMessageCounts } from "@workspace/api-client-react";
+import type { UnreadMessageCount } from "@workspace/api-client-react";
 
 export type StorageMode = "mongodb";
 
@@ -133,4 +135,8 @@ export function updateMessage(id: string, update: Partial<DBMessage>): Promise<D
     method: "PATCH",
     body: JSON.stringify(update),
   });
+}
+
+export function getUnreadMessageCounts(): Promise<UnreadMessageCount[]> {
+  return fetchUnreadMessageCounts();
 }

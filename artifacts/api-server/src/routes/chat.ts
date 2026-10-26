@@ -1,7 +1,12 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "node:crypto";
 import { type Document } from "mongodb";
+import {
+  GetPublicProfileByUsernameResponse,
+  GetUnreadMessageCountsResponse,
+} from "@workspace/api-zod";
 import { asDate, cleanDocument, getMongoDb, getStorageMode, publicUser } from "../lib/mongo";
+import { readSessionUserId } from "../lib/session";
 
 const router: IRouter = Router();
 
@@ -46,6 +51,26 @@ router.get("/users/:id", async (req, res) => {
   if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
   const user = await db.collection("users").findOne({ id: req.params.id });
   return res.json(publicUser(user));
+});
+
+router.get("/users/by-username/:username", async (req, res): Promise<void> => {
+  const db = await getMongoDb();
+  if (!db) {
+    res.status(503).json({ error: "MongoDB unavailable" });
+    return;
+  }
+  const username = String(req.params.username ?? "").trim().toLowerCase();
+  const user = await db.collection("users").findOne({ username });
+  if (!user) {
+    res.status(404).json({ error: "Profile not found." });
+    return;
+  }
+  const safe = publicUser(user);
+  res.json(GetPublicProfileByUsernameResponse.parse({
+    ...safe,
+    last_seen: safe?.last_seen ?? user.created_at ?? now(),
+    created_at: user.created_at ?? now(),
+  }));
 });
 
 router.get("/users", async (req, res) => {
@@ -177,6 +202,49 @@ router.patch("/conversations/:id", async (req, res) => {
   delete update.id;
   await db.collection("conversations").updateOne({ id: req.params.id }, { $set: update });
   return res.json(cleanDocument(await db.collection("conversations").findOne({ id: req.params.id })));
+});
+
+router.get("/messages/unread-counts", async (req, res): Promise<void> => {
+  const userId = readSessionUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Sign-in required." });
+    return;
+  }
+  const db = await getMongoDb();
+  if (!db) {
+    res.status(503).json({ error: "MongoDB unavailable" });
+    return;
+  }
+  const conversations = await db.collection("conversations")
+    .find({ participants: userId })
+    .project({ id: 1 })
+    .toArray();
+  const conversationIds = conversations.map(conversation => String(conversation.id));
+  if (conversationIds.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const counts = await db.collection("messages").aggregate([
+    {
+      $match: {
+        conversation_id: { $in: conversationIds },
+        sender_id: { $ne: userId },
+        read_by: { $nin: [userId] },
+        $or: [
+          { expires_at: { $gt: new Date() } },
+          { expires_at: { $gt: new Date().toISOString() } },
+          { expires_at: { $exists: false } },
+          { expires_at: null },
+        ],
+      },
+    },
+    { $group: { _id: "$conversation_id", count: { $sum: 1 } } },
+  ]).toArray();
+
+  res.json(GetUnreadMessageCountsResponse.parse(
+    counts.map(count => ({ conversation_id: String(count._id), count: Number(count.count) })),
+  ));
 });
 
 router.get("/messages", async (req, res) => {

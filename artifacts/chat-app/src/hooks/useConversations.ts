@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { DBUser, DBConversation } from "@/lib/database.types";
-import { getConversations, getMessages, getStorageMode, getUsers, updateConversation, updateMessage } from "@/lib/storage";
+import { getConversations, getUnreadMessageCounts, getUsers, updateConversation } from "@/lib/storage";
 
 export interface ConversationWithDetails extends DBConversation {
   other_user: DBUser | null;
@@ -13,12 +13,16 @@ export function useConversations() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<ConversationWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
+  const refreshInFlight = useRef(false);
 
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     if (!user) {
+      setConversations([]);
       setLoading(false);
       return;
     }
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
 
     try {
       const convs: DBConversation[] = await getConversations(user.id);
@@ -50,83 +54,84 @@ export function useConversations() {
       });
       setLoading(false);
 
-      try {
-        const allIds = [...new Set(convs.flatMap(c => c.participants))];
-        const users = await getUsers({ ids: allIds });
-        const userMap = new Map(users.map(u => [u.id, u]));
+      const allIds = [...new Set(convs.flatMap(c => c.participants))];
+      const [usersResult, unreadResult] = await Promise.allSettled([
+        allIds.length ? getUsers({ ids: allIds }) : Promise.resolve([] as DBUser[]),
+        getUnreadMessageCounts(),
+      ]);
+      const userMap = usersResult.status === "fulfilled"
+        ? new Map(usersResult.value.map(profile => [profile.id, profile]))
+        : null;
+      const unreadMap = unreadResult.status === "fulfilled"
+        ? new Map(unreadResult.value.map(item => [item.conversation_id, item.count]))
+        : null;
 
-        setConversations(current =>
-          current.map(conversation => {
-            const otherIds = conversation.participants.filter(id => id !== user.id);
-            return {
-              ...conversation,
-              other_user: otherIds.length === 1 ? (userMap.get(otherIds[0]) ?? null) : null,
-              participants_data: conversation.participants
-                .map(id => userMap.get(id))
-                .filter(Boolean) as DBUser[],
-            };
-          })
-        );
-      } catch (error) {
-        console.warn("Could not load conversation participant details", error);
+      if (usersResult.status === "rejected") {
+        console.warn("Could not load conversation participant details", usersResult.reason);
+      }
+      if (unreadResult.status === "rejected") {
+        console.warn("Could not load unread message counts", unreadResult.reason);
       }
 
-      // Unread counts are secondary data. Do not block the chat list on them.
-      if (visibleConversations.length > 0) {
-        const messageResults = await Promise.allSettled(
-          visibleConversations.map(conversation => getMessages(conversation.id))
-        );
-        const unreadMap = new Map<string, number>();
-        messageResults.forEach((result, index) => {
-          if (result.status !== "fulfilled") return;
-          for (const message of result.value) {
-            if (message.sender_id !== user.id && !message.read_by?.includes(user.id)) {
-              const conversationId = visibleConversations[index].id;
-              unreadMap.set(conversationId, (unreadMap.get(conversationId) ?? 0) + 1);
-            }
-          }
-        });
-        setConversations(current =>
-          current.map(conversation => ({
+      setConversations(current =>
+        visibleConversations.map(conversation => {
+          const previous = current.find(item => item.id === conversation.id);
+          const otherIds = conversation.participants.filter(id => id !== user.id);
+          return {
             ...conversation,
-            unread_count: unreadMap.get(conversation.id) ?? conversation.unread_count,
-          }))
-        );
-      }
+            other_user: userMap
+              ? otherIds.length === 1 ? userMap.get(otherIds[0]) ?? null : null
+              : previous?.other_user ?? null,
+            participants_data: userMap
+              ? conversation.participants.map(id => userMap.get(id)).filter(Boolean) as DBUser[]
+              : previous?.participants_data ?? [],
+            unread_count: unreadMap?.get(conversation.id) ?? previous?.unread_count ?? 0,
+          };
+        })
+      );
     } catch (error) {
       // Keep the last good list during a brief API restart or network failure.
       console.warn("Could not refresh conversations", error);
     } finally {
+      refreshInFlight.current = false;
       setLoading(false);
     }
-  };
+  }, [user]);
 
   // Instantly clear badge in local state; also clear unread_by in DB
   const markConversationRead = async (conversationId: string) => {
+    const conversation = conversations.find(item => item.id === conversationId);
     setConversations(prev =>
       prev.map(c => c.id === conversationId ? { ...c, unread_count: 0 } : c)
     );
-    if (user) {
-      await updateConversation(conversationId, { unread_by: [] });
+    if (user && conversation?.unread_by?.includes(user.id)) {
+      const unread_by = (conversation?.unread_by ?? []).filter(id => id !== user.id);
+      await updateConversation(conversationId, { unread_by });
     }
+  };
+
+  const updateConversationPreview = (conversationId: string, lastMessage: string, lastMessageAt: string) => {
+    setConversations(current => current.map(conversation =>
+      conversation.id === conversationId
+        ? { ...conversation, last_message: lastMessage, last_message_at: lastMessageAt }
+        : conversation,
+    ));
   };
 
   useEffect(() => {
     void fetchConversations();
-    let cancelled = false;
-    let cleanup: (() => void) | undefined;
-    void getStorageMode().then(mode => {
-      if (cancelled) return;
-      if (mode === "mongodb") {
-        const timer = window.setInterval(() => void fetchConversations(), 4000);
-        cleanup = () => window.clearInterval(timer);
-      }
-    });
-    return () => {
-      cancelled = true;
-      cleanup?.();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void fetchConversations();
     };
-  }, [user]);
+    const timer = window.setInterval(refreshWhenVisible, 15_000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
+    };
+  }, [fetchConversations]);
 
-  return { conversations, loading, refetch: fetchConversations, markConversationRead };
+  return { conversations, loading, refetch: fetchConversations, markConversationRead, updateConversationPreview };
 }

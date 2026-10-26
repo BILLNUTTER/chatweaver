@@ -4,7 +4,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import type { DBMessage, DBUser } from "@/lib/database.types";
 import {
   createMessage,
-  getConversations,
   getMessages,
   getStorageMode,
   getUsers,
@@ -29,21 +28,30 @@ export function useMessages(conversationId: string | null) {
   const [typingList, setTypingList] = useState<DBUser[]>([]);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const senderCache = useRef(new Map<string, { user: DBUser; expiresAt: number }>());
+  const fetchInFlight = useRef(false);
 
   const buildWithSenders = async (rawMessages: DBMessage[]): Promise<MessageWithSender[]> => {
     const senderIds = [...new Set(rawMessages.map(m => m.sender_id))];
     const replyIds = rawMessages.filter(m => m.reply_to).map(m => m.reply_to as string);
-    const allIds = [...new Set([...senderIds, ...replyIds])];
-
-    const users = allIds.length > 0 ? await getUsers({ ids: allIds }) : [];
-    const userMap = new Map(users.map(u => [u.id, u]));
-
-    let replyMessages: DBMessage[] = [];
-    if (replyIds.length > 0) {
-      const allMessages = await getMessages(conversationId ?? "");
-      replyMessages = allMessages.filter(message => replyIds.includes(message.id));
+    const replyMap = new Map(rawMessages.filter(message => replyIds.includes(message.id)).map(message => [message.id, message]));
+    const replySenderIds = [...replyMap.values()].map(message => message.sender_id);
+    const allIds = [...new Set([...senderIds, ...replySenderIds])];
+    const now = Date.now();
+    const missingIds = allIds.filter(id => {
+      const cached = senderCache.current.get(id);
+      return !cached || cached.expiresAt <= now;
+    });
+    if (missingIds.length > 0) {
+      const users = await getUsers({ ids: missingIds });
+      for (const profile of users) {
+        senderCache.current.set(profile.id, { user: profile, expiresAt: now + 30_000 });
+      }
     }
-    const replyMap = new Map(replyMessages.map(m => [m.id, m]));
+    const userMap = new Map(allIds.flatMap(id => {
+      const cached = senderCache.current.get(id);
+      return cached ? [[id, cached.user] as const] : [];
+    }));
 
     return rawMessages.map(m => ({
       ...m,
@@ -77,7 +85,8 @@ export function useMessages(conversationId: string | null) {
   };
 
   const fetchMessages = async () => {
-    if (!conversationId) return;
+    if (!conversationId || fetchInFlight.current) return;
+    fetchInFlight.current = true;
     setLoading(true);
 
     let data: DBMessage[];
@@ -89,11 +98,13 @@ export function useMessages(conversationId: string | null) {
       // Keep the last good message list during a brief API or profile lookup failure.
       console.warn("Could not refresh messages", error);
       setLoading(false);
+      fetchInFlight.current = false;
       return;
     }
 
     setMessages(current => mergeFetchedMessages(withSenders, current));
     setLoading(false);
+    fetchInFlight.current = false;
 
     // Mark messages as read — must await or Supabase JS v2 never fires the request
     if (user) {
@@ -107,7 +118,6 @@ export function useMessages(conversationId: string | null) {
             )
           );
         }
-        await updateConversation(conversationId, { unread_by: [] });
       } catch (error) {
         // Read receipts are secondary and must not break the visible conversation.
         console.warn("Could not update message read state", error);
@@ -121,6 +131,7 @@ export function useMessages(conversationId: string | null) {
 
     let cancelled = false;
     let messageTimer: number | undefined;
+    let visibilityHandler: (() => void) | undefined;
     let msgChannel: ReturnType<typeof supabase.channel> | undefined;
     let typingChannel: ReturnType<typeof supabase.channel> | undefined;
 
@@ -129,7 +140,12 @@ export function useMessages(conversationId: string | null) {
       if (cancelled) return;
 
       if (mode === "mongodb") {
-        messageTimer = window.setInterval(() => void fetchMessages(), 4000);
+        visibilityHandler = () => {
+          if (document.visibilityState === "visible") void fetchMessages();
+        };
+        messageTimer = window.setInterval(visibilityHandler, 5000);
+        document.addEventListener("visibilitychange", visibilityHandler);
+        window.addEventListener("focus", visibilityHandler);
         return;
       }
 
@@ -198,6 +214,10 @@ export function useMessages(conversationId: string | null) {
     return () => {
       cancelled = true;
       if (messageTimer) window.clearInterval(messageTimer);
+      if (visibilityHandler) {
+        document.removeEventListener("visibilitychange", visibilityHandler);
+        window.removeEventListener("focus", visibilityHandler);
+      }
       if (msgChannel) void supabase?.removeChannel(msgChannel);
       if (typingChannel) void supabase?.removeChannel(typingChannel);
       typingUsers.delete(conversationId);
@@ -250,18 +270,10 @@ export function useMessages(conversationId: string | null) {
       _optimistic: false,
     } : message));
 
-    try {
-      const conv = (await getConversations(user.id)).find(item => item.id === conversationId);
-      const otherParticipants = (conv?.participants ?? []).filter((id: string) => id !== user.id);
-
-      await updateConversation(conversationId, {
-        last_message: content.trim().slice(0, 100),
-        last_message_at: new Date().toISOString(),
-        unread_by: otherParticipants,
-      });
-    } catch (error) {
-      console.warn("Could not update conversation preview", error);
-    }
+    void updateConversation(conversationId, {
+      last_message: content.trim().slice(0, 100),
+      last_message_at: new Date().toISOString(),
+    }).catch(error => console.warn("Could not update conversation preview", error));
 
     stopTyping();
     return null;

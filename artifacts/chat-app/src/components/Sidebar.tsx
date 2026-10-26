@@ -1,24 +1,31 @@
-import { useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import {
-  MessageCircle, Users, Settings, Search, Plus, Moon, Sun, LogOut,
+  MessageCircle, Users, Settings, Search, Plus, Moon, Sun, LogOut, BellRing, Share2,
   X, Check, Trash2, AlertTriangle, UserSearch
 } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useConversations, type ConversationWithDetails } from "@/hooks/useConversations";
+import type { ConversationWithDetails } from "@/hooks/useConversations";
 import { useContacts } from "@/hooks/useContacts";
 import { updateUser } from "@/lib/storage";
 import { useToast } from "@/hooks/use-toast";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import type { DBUser } from "@/lib/database.types";
+import { getGetMyNotificationsQueryKey, useGetMyNotifications } from "@workspace/api-client-react";
 
-type Panel = "chats" | "contacts" | "settings";
+const SystemNotices = lazy(() => import("@/components/SystemNotices"));
+
+type Panel = "chats" | "contacts" | "updates" | "settings";
 type ContactTab = "my" | "find";
 
 interface SidebarProps {
   selectedConversationId: string | null;
   onSelectConversation: (id: string) => void;
+  conversations: ConversationWithDetails[];
+  conversationsLoading: boolean;
+  markConversationRead: (id: string) => Promise<void>;
+  refetchConversations: () => Promise<void>;
 }
 
 interface GlobalResults {
@@ -27,12 +34,27 @@ interface GlobalResults {
   others: DBUser[];
 }
 
-export function Sidebar({ selectedConversationId, onSelectConversation }: SidebarProps) {
+export function Sidebar({
+  selectedConversationId,
+  onSelectConversation,
+  conversations,
+  conversationsLoading: convsLoading,
+  markConversationRead,
+  refetchConversations,
+}: SidebarProps) {
   const { user, dbUser, signOut, deleteAccount, refreshUser } = useAuth();
-  const { conversations, loading: convsLoading, markConversationRead } = useConversations();
   const { contacts, loading: contactsLoading, addContact, searchUsers, startConversation } = useContacts();
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
+  const noticesQuery = useGetMyNotifications({
+    query: {
+      queryKey: getGetMyNotificationsQueryKey(),
+      staleTime: 10_000,
+      refetchInterval: 30_000,
+      refetchOnWindowFocus: true,
+    },
+  });
+  const unreadNotices = noticesQuery.data?.filter(notice => !notice.read).length ?? 0;
 
   const [panel, setPanel] = useState<Panel>("chats");
   const [contactTab, setContactTab] = useState<ContactTab>("find");
@@ -103,7 +125,13 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
 
   const handleUserClick = async (userId: string) => {
     const convId = await startConversation(userId);
-    if (convId) { markConversationRead(convId); onSelectConversation(convId); setPanel("chats"); setSearch(""); }
+    if (convId) {
+      await refetchConversations();
+      await markConversationRead(convId);
+      onSelectConversation(convId);
+      setPanel("chats");
+      setSearch("");
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -133,6 +161,39 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
     } finally {
       setProfileSaving(false);
     }
+  };
+
+  const shareLink = async (url: URL, title: string, text: string) => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url: url.toString() });
+      } else {
+        await navigator.clipboard.writeText(url.toString());
+        toast({ title: "Link copied", description: "You can now share it with a friend." });
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      toast({ title: "Could not share link", description: "Please try again.", variant: "destructive" });
+    }
+  };
+
+  const makeShareUrl = (path: string, invite = false) => {
+    const base = new URL(import.meta.env.BASE_URL, window.location.origin);
+    if (!base.pathname.endsWith("/")) base.pathname += "/";
+    const url = new URL(path, base);
+    if (invite && dbUser?.username) url.searchParams.set("invite", dbUser.username);
+    return url;
+  };
+
+  const handleShareApp = () => {
+    const inviteUrl = makeShareUrl("", true);
+    void shareLink(inviteUrl, "Join me on WhatsChat", "Register on WhatsChat and start chatting with me.");
+  };
+
+  const handleShareProfile = () => {
+    if (!dbUser?.username) return;
+    const profileUrl = makeShareUrl(`u/${encodeURIComponent(dbUser.username)}`);
+    void shareLink(profileUrl, `${dbUser.name} on WhatsChat`, `View ${dbUser.name}'s WhatsChat profile.`);
   };
 
   const isOnline = (lastSeen?: string | null) => {
@@ -182,6 +243,7 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
         <div className="flex border-t border-white/20">
           <MobileTabBtn label="CHATS" active={panel === "chats"} onClick={() => setPanel("chats")} />
           <MobileTabBtn label="PEOPLE" active={panel === "contacts"} onClick={() => setPanel("contacts")} />
+          <MobileTabBtn label={unreadNotices ? `UPDATES ${unreadNotices}` : "UPDATES"} active={panel === "updates"} onClick={() => setPanel("updates")} />
           <MobileTabBtn label="SETTINGS" active={panel === "settings"} onClick={() => setPanel("settings")} />
         </div>
       </div>
@@ -196,6 +258,10 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
         </NavBtn>
         <NavBtn active={panel === "contacts"} onClick={() => setPanel("contacts")} title="People">
           <Users className="w-5 h-5" />
+        </NavBtn>
+        <NavBtn active={panel === "updates"} onClick={() => setPanel("updates")} title={unreadNotices ? `Updates (${unreadNotices} unread)` : "Updates"}>
+          <BellRing className="w-5 h-5" />
+          {unreadNotices > 0 && <span className="absolute -right-1 -top-1 min-w-4 h-4 rounded-full bg-red-500 px-1 text-[9px] font-bold leading-4 text-white">{unreadNotices > 9 ? "9+" : unreadNotices}</span>}
         </NavBtn>
         <div className="flex-1" />
         <NavBtn active={false} onClick={toggleTheme} title={theme === "dark" ? "Light mode" : "Dark mode"}>
@@ -434,6 +500,12 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
           </>
         )}
 
+        {panel === "updates" && (
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-gray-500">Loading updates…</div>}>
+            <SystemNotices />
+          </Suspense>
+        )}
+
         {/* ── SETTINGS ── */}
         {panel === "settings" && (
           <div className="flex-1 overflow-y-auto">
@@ -481,6 +553,15 @@ export function Sidebar({ selectedConversationId, onSelectConversation }: Sideba
                    >
                      {profileSaving ? "Saving…" : "Save profile"}
                    </button>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <button onClick={handleShareApp} className="flex items-center justify-center gap-2 rounded-xl border border-[#d6e5e2] px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800" data-testid="button-share-app">
+                        <Share2 className="h-4 w-4 text-[#128C7E]" />Invite a friend
+                      </button>
+                      <button onClick={handleShareProfile} disabled={!dbUser.username} className="flex items-center justify-center gap-2 rounded-xl border border-[#d6e5e2] px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800" data-testid="button-share-profile">
+                        <Share2 className="h-4 w-4 text-[#128C7E]" />Share profile
+                      </button>
+                    </div>
+                    <p className="text-xs leading-5 text-gray-400 dark:text-gray-500">Profile photo uploads are paused until secure file storage is connected.</p>
                    <SettingRow label="Contacts" value={`${dbUser.friends?.length ?? 0} people`} />
                  </div>
                 {!showDeleteConfirm ? (
