@@ -157,8 +157,8 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
 
   return (
     <div className="flex-1 min-w-0 flex flex-col h-full max-h-full min-h-0 overflow-hidden bg-[#efeae2] dark:bg-gray-950 relative">
-      {/* Header */}
-      <div className="relative z-20 flex-none px-3 py-2.5 bg-[#f0f2f5] dark:bg-gray-900 flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 shadow-sm">
+      {/* Header is fixed to the mobile viewport so keyboard focus cannot pan it away. */}
+      <div className="absolute inset-x-0 top-0 z-40 h-16 flex-none px-3 bg-[#f0f2f5] dark:bg-gray-900 flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 shadow-sm md:relative md:inset-auto md:h-16">
         {/* Back button — mobile only */}
         {onBack && (
           <button
@@ -214,7 +214,7 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
       </div>
 
       {showChatSearch && (
-        <div className="flex-none px-3 py-2 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2">
+        <div className="absolute inset-x-0 top-16 z-40 h-12 flex-none px-3 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2 md:relative md:inset-auto md:h-12">
           <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
           <input
             ref={chatSearchRef}
@@ -234,7 +234,9 @@ export function ChatWindow({ conversationId, onBack }: ChatWindowProps) {
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="flex-1 basis-0 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 space-y-1"
+        className={`flex-1 basis-0 min-h-0 overflow-y-auto overscroll-contain px-4 pb-4 space-y-1 ${
+          showChatSearch ? "pt-[112px]" : "pt-[68px]"
+        } md:py-4`}
         style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")" }}
       >
         {loading && messages.length === 0 ? (
