@@ -33,6 +33,24 @@
     "api/admin/notifications.js": {
       "includeFiles": "artifacts/api-server/dist/vercel/**"
     },
+    "api/admin/chats.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/admin/chats/[id]/messages.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/admin/chats/[id]/read.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/admin-chats.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/admin-chats/[id]/messages.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/admin-chats/[id]/read.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
     "api/notifications.js": {
       "includeFiles": "artifacts/api-server/dist/vercel/**"
     },

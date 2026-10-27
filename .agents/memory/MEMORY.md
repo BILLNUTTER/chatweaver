@@ -1,3 +1,4 @@
 - [Vercel API deployment](vercel-api-deployment.md) — deploy the MongoDB API as a generated serverless bundle and configure its production secrets separately.
 - [Mobile chat keyboard layout](mobile-chat-keyboard-layout.md) — size the app to VisualViewport changes and pin the header to the visible viewport.
 - [WhatsChat profile-photo storage](whatschat-profile-photo-storage.md) — uploads are deferred until compatible storage is ready; enforce a 5 MB limit when added.
+- [Admin chat privacy](admin-chat-privacy.md) — replies to group admin chats are private to each respondent and the admin.

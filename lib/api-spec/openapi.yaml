@@ -331,6 +331,8 @@ paths:
                 $ref: "#/components/schemas/AdminChatMessage"
         "400":
           description: Replies are disabled or message is invalid
+        "403":
+          description: Replies are disabled for this thread
         "401":
           description: Invalid session
         "404":

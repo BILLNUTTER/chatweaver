@@ -1,16 +1,29 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getGetMyNotificationsQueryKey, useGetMyNotifications, useMarkNotificationRead } from "@workspace/api-client-react";
+import {
+  getGetMyAdminChatsQueryKey,
+  getGetMyNotificationsQueryKey,
+  useGetMyAdminChats,
+  useGetMyNotifications,
+  useMarkNotificationRead,
+} from "@workspace/api-client-react";
 import type { SystemNotification } from "@workspace/api-client-react";
-import { AlertTriangle, BellRing, Check, Clock3, RefreshCw } from "lucide-react";
+import { AlertTriangle, BellRing, Check, Clock3, MessageCircle, RefreshCw } from "lucide-react";
+import { AdminChatInbox } from "@/components/AdminChatInbox";
 
 export default function SystemNotices() {
+  const [view, setView] = useState<"notices" | "chats">("notices");
   const notificationsQuery = useGetMyNotifications({
     query: { queryKey: getGetMyNotificationsQueryKey(), staleTime: 20_000, refetchOnWindowFocus: true },
+  });
+  const chatsQuery = useGetMyAdminChats({
+    query: { queryKey: getGetMyAdminChatsQueryKey(), staleTime: 10_000, refetchOnWindowFocus: true },
   });
   const markRead = useMarkNotificationRead();
   const queryClient = useQueryClient();
   const notices = useMemo(() => [...(notificationsQuery.data ?? [])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [notificationsQuery.data]);
+  const unreadNotices = notices.filter(notice => !notice.read).length;
+  const unreadChats = chatsQuery.data?.reduce((total, thread) => total + thread.unread_count, 0) ?? 0;
 
   const handleRead = (notice: SystemNotification) => {
     if (notice.read || markRead.isPending) return;
@@ -27,15 +40,30 @@ export default function SystemNotices() {
   return (
     <section className="flex h-full min-h-0 flex-col bg-[#f7fbfa] text-[#183332] dark:bg-[#101b1c] dark:text-[#e3efed]" data-testid="system-notices-surface">
       <header className="border-b border-[#dcebe8] bg-[#fbfefd] px-5 py-5 dark:border-[#294143] dark:bg-[#172526] sm:px-7">
-        <div className="mx-auto flex max-w-3xl items-start justify-between gap-4">
-          <div>
+        <div className="mx-auto max-w-3xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
             <div className="flex items-center gap-2"><BellRing className="h-5 w-5 text-[#128c7e]" /><h1 className="text-lg font-semibold">Updates</h1></div>
-            <p className="mt-1 text-sm text-[#78908d] dark:text-[#9cb3b0]">Important notes from WhatsChat. These notices are one-way.</p>
+              <p className="mt-1 text-sm text-[#78908d] dark:text-[#9cb3b0]">Notices and private chats from WhatsChat.</p>
+            </div>
+            <button onClick={() => view === "notices" ? notificationsQuery.refetch() : chatsQuery.refetch()} disabled={notificationsQuery.isFetching || chatsQuery.isFetching} aria-label="Refresh updates" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[#78908d] transition-colors hover:bg-[#edf5f3] disabled:opacity-50 dark:hover:bg-[#203334]" data-testid="button-refresh-notices"><RefreshCw className={`h-4 w-4 ${notificationsQuery.isFetching || chatsQuery.isFetching ? "animate-spin" : ""}`} /></button>
           </div>
-          <button onClick={() => notificationsQuery.refetch()} disabled={notificationsQuery.isFetching} aria-label="Refresh updates" className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[#78908d] transition-colors hover:bg-[#edf5f3] disabled:opacity-50 dark:hover:bg-[#203334]" data-testid="button-refresh-notices"><RefreshCw className={`h-4 w-4 ${notificationsQuery.isFetching ? "animate-spin" : ""}`} /></button>
+          <div className="mt-4 grid grid-cols-2 rounded-xl bg-[#edf5f3] p-1 dark:bg-[#203334]" role="tablist" aria-label="Update type">
+            <button onClick={() => setView("notices")} role="tab" aria-selected={view === "notices"} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${view === "notices" ? "bg-white text-[#128c7e] shadow-sm dark:bg-[#172526] dark:text-[#46cfc0]" : "text-[#78908d]"}`} data-testid="tab-one-way-notices">
+              <BellRing className="h-4 w-4" />Notices{unreadNotices > 0 && <span className="rounded-full bg-[#25D366] px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadNotices}</span>}
+            </button>
+            <button onClick={() => setView("chats")} role="tab" aria-selected={view === "chats"} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${view === "chats" ? "bg-white text-[#128c7e] shadow-sm dark:bg-[#172526] dark:text-[#46cfc0]" : "text-[#78908d]"}`} data-testid="tab-admin-chats">
+              <MessageCircle className="h-4 w-4" />Admin chats{unreadChats > 0 && <span className="rounded-full bg-[#25D366] px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadChats}</span>}
+            </button>
+          </div>
         </div>
       </header>
-      <div className="mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-5 sm:px-7">
+      {view === "chats" ? (
+        <div className="mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-5 sm:px-7" role="tabpanel" data-testid="panel-admin-chats">
+          <AdminChatInbox />
+        </div>
+      ) : (
+      <div className="mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 py-5 sm:px-7" role="tabpanel" data-testid="panel-one-way-notices">
         {notificationsQuery.isLoading ? <NoticeSkeleton /> : notificationsQuery.isError ? (
           <div className="rounded-2xl border border-[#dcebe8] bg-[#fbfefd] px-6 py-12 text-center dark:border-[#294143] dark:bg-[#172526]" data-testid="status-notices-error"><BellRing className="mx-auto h-8 w-8 text-[#91aaa6]" /><p className="mt-3 font-semibold">Updates aren’t available</p><p className="mt-1 text-sm text-[#78908d]">Check your connection, then try again.</p><button onClick={() => notificationsQuery.refetch()} className="mt-4 rounded-lg bg-[#128c7e] px-4 py-2 text-sm font-semibold text-white" data-testid="button-retry-notices">Try again</button></div>
         ) : notices.length === 0 ? (
@@ -46,6 +74,7 @@ export default function SystemNotices() {
           </div>
         )}
       </div>
+      )}
     </section>
   );
 }

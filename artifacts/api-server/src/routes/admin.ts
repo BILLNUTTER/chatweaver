@@ -4,7 +4,6 @@ import {
   AdminLoginBody,
   AdminLoginResponse,
   GetAdminUsersResponse,
-  MarkNotificationReadResponse,
   SendAdminNotificationBody,
 } from "@workspace/api-zod";
 import { getMongoDb } from "../lib/mongo";
@@ -174,28 +173,33 @@ router.post("/admin/notifications", async (req, res): Promise<void> => {
     res.status(503).json({ error: "MongoDB unavailable" });
     return;
   }
-  const recipient = await db.collection("users").findOne(
-    { id: input.data.recipient_id },
-    { projection: { id: 1 } },
-  );
-  if (!recipient) {
-    res.status(404).json({ error: "User not found." });
+  const recipients = input.data.audience === "all"
+    ? await db.collection("users").find({}, { projection: { id: 1 } }).toArray()
+    : input.data.recipient_id
+      ? [await db.collection("users").findOne(
+          { id: input.data.recipient_id },
+          { projection: { id: 1 } },
+        )].filter(Boolean)
+      : [];
+  if (input.data.audience === "user" && recipients.length === 0) {
+    res.status(input.data.recipient_id ? 404 : 400).json({
+      error: input.data.recipient_id ? "User not found." : "Choose a recipient.",
+    });
     return;
   }
-
   const timestamp = new Date();
-  const notification = {
+  const notifications = recipients.map(recipient => ({
     id: randomUUID(),
-    recipient_id: input.data.recipient_id,
+    recipient_id: String(recipient!.id),
     type: input.data.type,
     title: input.data.title.trim(),
     content: input.data.content.trim(),
     read: false,
     created_at: timestamp,
     updated_at: timestamp,
-  };
-  await db.collection("notifications").insertOne(notification);
-  res.status(201).json(MarkNotificationReadResponse.parse(notification));
+  }));
+  if (notifications.length) await db.collection("notifications").insertMany(notifications);
+  res.status(201).json({ sent: notifications.length });
 });
 
 export { verifyAdminToken };

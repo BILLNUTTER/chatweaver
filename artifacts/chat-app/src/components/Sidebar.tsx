@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, type ReactNode } from "react";
 import {
   MessageCircle, Users, Settings, Search, Plus, Moon, Sun, LogOut, BellRing, Share2,
   X, Check, Trash2, AlertTriangle, UserSearch
@@ -12,7 +12,12 @@ import { updateUser } from "@/lib/storage";
 import { useToast } from "@/hooks/use-toast";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import type { DBUser } from "@/lib/database.types";
-import { getGetMyNotificationsQueryKey, useGetMyNotifications } from "@workspace/api-client-react";
+import {
+  getGetMyAdminChatsQueryKey,
+  getGetMyNotificationsQueryKey,
+  useGetMyAdminChats,
+  useGetMyNotifications,
+} from "@workspace/api-client-react";
 
 const SystemNotices = lazy(() => import("@/components/SystemNotices"));
 
@@ -54,7 +59,17 @@ export function Sidebar({
       refetchOnWindowFocus: true,
     },
   });
+  const adminChatsQuery = useGetMyAdminChats({
+    query: {
+      queryKey: getGetMyAdminChatsQueryKey(),
+      staleTime: 10_000,
+      refetchInterval: 30_000,
+      refetchOnWindowFocus: true,
+    },
+  });
   const unreadNotices = noticesQuery.data?.filter(notice => !notice.read).length ?? 0;
+  const unreadAdminChats = adminChatsQuery.data?.reduce((total, thread) => total + thread.unread_count, 0) ?? 0;
+  const unreadUpdates = unreadNotices + unreadAdminChats;
 
   const [panel, setPanel] = useState<Panel>("chats");
   const [contactTab, setContactTab] = useState<ContactTab>("find");
@@ -239,13 +254,6 @@ export function Sidebar({
             </button>
           </div>
         </div>
-        {/* Mobile tab bar */}
-        <div className="flex border-t border-white/20">
-          <MobileTabBtn label="CHATS" active={panel === "chats"} onClick={() => setPanel("chats")} />
-          <MobileTabBtn label="PEOPLE" active={panel === "contacts"} onClick={() => setPanel("contacts")} />
-          <MobileTabBtn label={unreadNotices ? `UPDATES ${unreadNotices}` : "UPDATES"} active={panel === "updates"} onClick={() => setPanel("updates")} />
-          <MobileTabBtn label="SETTINGS" active={panel === "settings"} onClick={() => setPanel("settings")} />
-        </div>
       </div>
 
       {/* ── DESKTOP ICON RAIL (hidden on mobile) ── */}
@@ -259,9 +267,9 @@ export function Sidebar({
         <NavBtn active={panel === "contacts"} onClick={() => setPanel("contacts")} title="People">
           <Users className="w-5 h-5" />
         </NavBtn>
-        <NavBtn active={panel === "updates"} onClick={() => setPanel("updates")} title={unreadNotices ? `Updates (${unreadNotices} unread)` : "Updates"}>
+        <NavBtn active={panel === "updates"} onClick={() => setPanel("updates")} title={unreadUpdates ? `Updates (${unreadUpdates} unread)` : "Updates"}>
           <BellRing className="w-5 h-5" />
-          {unreadNotices > 0 && <span className="absolute -right-1 -top-1 min-w-4 h-4 rounded-full bg-red-500 px-1 text-[9px] font-bold leading-4 text-white">{unreadNotices > 9 ? "9+" : unreadNotices}</span>}
+          {unreadUpdates > 0 && <span className="absolute -right-1 -top-1 min-w-4 h-4 rounded-full bg-red-500 px-1 text-[9px] font-bold leading-4 text-white">{unreadUpdates > 9 ? "9+" : unreadUpdates}</span>}
         </NavBtn>
         <div className="flex-1" />
         <NavBtn active={false} onClick={toggleTheme} title={theme === "dark" ? "Light mode" : "Dark mode"}>
@@ -597,19 +605,40 @@ export function Sidebar({
           </div>
         )}
       </div>
+
+      <nav className="md:hidden flex flex-shrink-0 border-t border-gray-200 bg-[#fbfefd] px-1 pt-1 dark:border-gray-800 dark:bg-gray-900 pb-[env(safe-area-inset-bottom)]" aria-label="Main navigation">
+        <MobileTabBtn label="Chats" active={panel === "chats"} onClick={() => setPanel("chats")} icon={<MessageCircle className="h-5 w-5" />} />
+        <MobileTabBtn label="People" active={panel === "contacts"} onClick={() => setPanel("contacts")} icon={<Users className="h-5 w-5" />} />
+        <MobileTabBtn
+          label="Updates"
+          active={panel === "updates"}
+          onClick={() => setPanel("updates")}
+          icon={<BellRing className="h-5 w-5" />}
+          badge={unreadUpdates}
+        />
+        <MobileTabBtn label="Settings" active={panel === "settings"} onClick={() => setPanel("settings")} icon={<Settings className="h-5 w-5" />} />
+      </nav>
     </div>
   );
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
 
-function MobileTabBtn({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function MobileTabBtn({ label, active, onClick, icon, badge = 0 }: { label: string; active: boolean; onClick: () => void; icon: ReactNode; badge?: number }) {
   return (
-    <button onClick={onClick}
-      className={`flex-1 py-2.5 text-[11px] font-bold tracking-widest transition-colors ${
-        active ? "text-white border-b-2 border-white" : "text-white/50 hover:text-white/80"
-      }`}>
-      {label}
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium transition-colors ${
+        active ? "text-[#128c7e] dark:text-[#46cfc0]" : "text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100"
+      }`}
+    >
+      <span className="relative">
+        {icon}
+        {badge > 0 && <span className="absolute -right-2 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-[#25D366] px-1 text-[9px] font-bold leading-none text-white">{badge > 9 ? "9+" : badge}</span>}
+      </span>
+      <span>{label}</span>
     </button>
   );
 }

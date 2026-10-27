@@ -30,6 +30,11 @@ export async function getMongoDb(): Promise<Db | null> {
         db.collection("messages").createIndex({ conversation_id: 1, sender_id: 1, expires_at: 1 }),
         db.collection("users").createIndex({ email: 1 }, { unique: true, sparse: true }),
         db.collection("users").createIndex({ username: 1 }, { unique: true, sparse: true }),
+        db.collection("admin_chat_threads").createIndex({ id: 1 }, { unique: true }),
+        db.collection("admin_chat_threads").createIndex({ recipient_id: 1, last_message_at: -1 }),
+        db.collection("admin_chat_threads").createIndex({ last_message_at: -1 }),
+        db.collection("admin_chat_messages").createIndex({ id: 1 }, { unique: true }),
+        db.collection("admin_chat_messages").createIndex({ thread_id: 1, created_at: 1 }),
       ]);
       logger.info({ database: databaseName }, "MongoDB is available");
       return db;
