@@ -21,5 +21,4 @@ export interface AdminChatInput {
      * @maxLength 2000
      */
   content: string;
-  allow_replies: boolean;
 }

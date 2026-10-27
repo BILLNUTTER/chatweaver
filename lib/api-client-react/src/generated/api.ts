@@ -28,11 +28,17 @@ import type {
   AdminChatThread,
   AdminLoginInput,
   AdminNotificationInput,
+  AdminNotificationReply,
   AdminSendResult,
   AdminSession,
   AdminUser,
+  FriendRequestResult,
   HealthStatus,
   MyAdminChatThread,
+  NotificationReply,
+  NotificationReplyInput,
+  ProfileUpdateInput,
+  ProfileUpdateResult,
   PublicProfile,
   SystemNotification,
   UnreadMessageCount
@@ -499,6 +505,441 @@ export const useSendAdminNotification = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getSendAdminNotificationMutationOptions(options));
+    }
+
+export const getGetAdminNotificationRepliesUrl = () => {
+
+
+
+
+  return `/api/admin/notification-replies`
+}
+
+/**
+ * @summary List private responses to reply-enabled notices
+ */
+export const getAdminNotificationReplies = async ( options?: RequestInit): Promise<AdminNotificationReply[]> => {
+
+  return customFetch<AdminNotificationReply[]>(getGetAdminNotificationRepliesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminNotificationRepliesQueryKey = () => {
+    return [
+    `/api/admin/notification-replies`
+    ] as const;
+    }
+
+
+export const getGetAdminNotificationRepliesQueryOptions = <TData = Awaited<ReturnType<typeof getAdminNotificationReplies>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminNotificationReplies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminNotificationRepliesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminNotificationReplies>>> = ({ signal }) => getAdminNotificationReplies({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminNotificationReplies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminNotificationRepliesQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminNotificationReplies>>>
+export type GetAdminNotificationRepliesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List private responses to reply-enabled notices
+ */
+
+export function useGetAdminNotificationReplies<TData = Awaited<ReturnType<typeof getAdminNotificationReplies>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminNotificationReplies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminNotificationRepliesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateMyProfileUrl = () => {
+
+
+
+
+  return `/api/profile`
+}
+
+/**
+ * @summary Update the signed-in user's profile details and picture
+ */
+export const updateMyProfile = async (profileUpdateInput: ProfileUpdateInput, options?: RequestInit): Promise<ProfileUpdateResult> => {
+
+  return customFetch<ProfileUpdateResult>(getUpdateMyProfileUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      profileUpdateInput,)
+  }
+);}
+
+
+
+
+export const getUpdateMyProfileMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMyProfile>>, TError,{data: BodyType<ProfileUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMyProfile>>, TError,{data: BodyType<ProfileUpdateInput>}, TContext> => {
+
+const mutationKey = ['updateMyProfile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMyProfile>>, {data: BodyType<ProfileUpdateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateMyProfile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMyProfileMutationResult = NonNullable<Awaited<ReturnType<typeof updateMyProfile>>>
+    export type UpdateMyProfileMutationBody = BodyType<ProfileUpdateInput>
+    export type UpdateMyProfileMutationError = ErrorType<void>
+
+    /**
+ * @summary Update the signed-in user's profile details and picture
+ */
+export const useUpdateMyProfile = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMyProfile>>, TError,{data: BodyType<ProfileUpdateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMyProfile>>,
+        TError,
+        {data: BodyType<ProfileUpdateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateMyProfileMutationOptions(options));
+    }
+
+export const getGetIncomingFriendRequestsUrl = () => {
+
+
+
+
+  return `/api/friend-requests`
+}
+
+/**
+ * @summary List incoming friend requests for the signed-in user
+ */
+export const getIncomingFriendRequests = async ( options?: RequestInit): Promise<PublicProfile[]> => {
+
+  return customFetch<PublicProfile[]>(getGetIncomingFriendRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetIncomingFriendRequestsQueryKey = () => {
+    return [
+    `/api/friend-requests`
+    ] as const;
+    }
+
+
+export const getGetIncomingFriendRequestsQueryOptions = <TData = Awaited<ReturnType<typeof getIncomingFriendRequests>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIncomingFriendRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetIncomingFriendRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getIncomingFriendRequests>>> = ({ signal }) => getIncomingFriendRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getIncomingFriendRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetIncomingFriendRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof getIncomingFriendRequests>>>
+export type GetIncomingFriendRequestsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List incoming friend requests for the signed-in user
+ */
+
+export function useGetIncomingFriendRequests<TData = Awaited<ReturnType<typeof getIncomingFriendRequests>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIncomingFriendRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetIncomingFriendRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSendFriendRequestUrl = (userId: string,) => {
+
+
+
+
+  return `/api/friend-requests/${userId}`
+}
+
+/**
+ * @summary Send a friend request to a user
+ */
+export const sendFriendRequest = async (userId: string, options?: RequestInit): Promise<FriendRequestResult> => {
+
+  return customFetch<FriendRequestResult>(getSendFriendRequestUrl(userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSendFriendRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendFriendRequest>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendFriendRequest>>, TError,{userId: string}, TContext> => {
+
+const mutationKey = ['sendFriendRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendFriendRequest>>, {userId: string}> = (props) => {
+          const {userId} = props ?? {};
+
+          return  sendFriendRequest(userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendFriendRequestMutationResult = NonNullable<Awaited<ReturnType<typeof sendFriendRequest>>>
+
+    export type SendFriendRequestMutationError = ErrorType<void>
+
+    /**
+ * @summary Send a friend request to a user
+ */
+export const useSendFriendRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendFriendRequest>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendFriendRequest>>,
+        TError,
+        {userId: string},
+        TContext
+      > => {
+      return useMutation(getSendFriendRequestMutationOptions(options));
+    }
+
+export const getDeclineOrCancelFriendRequestUrl = (userId: string,) => {
+
+
+
+
+  return `/api/friend-requests/${userId}`
+}
+
+/**
+ * @summary Decline an incoming request or cancel an outgoing request
+ */
+export const declineOrCancelFriendRequest = async (userId: string, options?: RequestInit): Promise<FriendRequestResult> => {
+
+  return customFetch<FriendRequestResult>(getDeclineOrCancelFriendRequestUrl(userId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeclineOrCancelFriendRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof declineOrCancelFriendRequest>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof declineOrCancelFriendRequest>>, TError,{userId: string}, TContext> => {
+
+const mutationKey = ['declineOrCancelFriendRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof declineOrCancelFriendRequest>>, {userId: string}> = (props) => {
+          const {userId} = props ?? {};
+
+          return  declineOrCancelFriendRequest(userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeclineOrCancelFriendRequestMutationResult = NonNullable<Awaited<ReturnType<typeof declineOrCancelFriendRequest>>>
+
+    export type DeclineOrCancelFriendRequestMutationError = ErrorType<void>
+
+    /**
+ * @summary Decline an incoming request or cancel an outgoing request
+ */
+export const useDeclineOrCancelFriendRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof declineOrCancelFriendRequest>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof declineOrCancelFriendRequest>>,
+        TError,
+        {userId: string},
+        TContext
+      > => {
+      return useMutation(getDeclineOrCancelFriendRequestMutationOptions(options));
+    }
+
+export const getAcceptFriendRequestUrl = (userId: string,) => {
+
+
+
+
+  return `/api/friend-requests/${userId}/accept`
+}
+
+/**
+ * @summary Accept an incoming friend request
+ */
+export const acceptFriendRequest = async (userId: string, options?: RequestInit): Promise<FriendRequestResult> => {
+
+  return customFetch<FriendRequestResult>(getAcceptFriendRequestUrl(userId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAcceptFriendRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptFriendRequest>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof acceptFriendRequest>>, TError,{userId: string}, TContext> => {
+
+const mutationKey = ['acceptFriendRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof acceptFriendRequest>>, {userId: string}> = (props) => {
+          const {userId} = props ?? {};
+
+          return  acceptFriendRequest(userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AcceptFriendRequestMutationResult = NonNullable<Awaited<ReturnType<typeof acceptFriendRequest>>>
+
+    export type AcceptFriendRequestMutationError = ErrorType<void>
+
+    /**
+ * @summary Accept an incoming friend request
+ */
+export const useAcceptFriendRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof acceptFriendRequest>>, TError,{userId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof acceptFriendRequest>>,
+        TError,
+        {userId: string},
+        TContext
+      > => {
+      return useMutation(getAcceptFriendRequestMutationOptions(options));
     }
 
 export const getGetAdminChatsUrl = () => {
@@ -1309,5 +1750,77 @@ export const useMarkNotificationRead = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getMarkNotificationReadMutationOptions(options));
+    }
+
+export const getReplyToNotificationUrl = (id: string,) => {
+
+
+
+
+  return `/api/notifications/${id}/replies`
+}
+
+/**
+ * @summary Reply privately to a notice that allows responses
+ */
+export const replyToNotification = async (id: string,
+    notificationReplyInput: NotificationReplyInput, options?: RequestInit): Promise<NotificationReply> => {
+
+  return customFetch<NotificationReply>(getReplyToNotificationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      notificationReplyInput,)
+  }
+);}
+
+
+
+
+export const getReplyToNotificationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replyToNotification>>, TError,{id: string;data: BodyType<NotificationReplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replyToNotification>>, TError,{id: string;data: BodyType<NotificationReplyInput>}, TContext> => {
+
+const mutationKey = ['replyToNotification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replyToNotification>>, {id: string;data: BodyType<NotificationReplyInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  replyToNotification(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplyToNotificationMutationResult = NonNullable<Awaited<ReturnType<typeof replyToNotification>>>
+    export type ReplyToNotificationMutationBody = BodyType<NotificationReplyInput>
+    export type ReplyToNotificationMutationError = ErrorType<void>
+
+    /**
+ * @summary Reply privately to a notice that allows responses
+ */
+export const useReplyToNotification = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replyToNotification>>, TError,{id: string;data: BodyType<NotificationReplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof replyToNotification>>,
+        TError,
+        {id: string;data: BodyType<NotificationReplyInput>},
+        TContext
+      > => {
+      return useMutation(getReplyToNotificationMutationOptions(options));
     }
 

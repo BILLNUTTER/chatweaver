@@ -103,7 +103,104 @@ export const SendAdminNotificationBody = zod.object({
   "recipient_id": zod.string().min(1).optional(),
   "type": zod.enum(['update', 'warning']),
   "title": zod.string().min(1).max(sendAdminNotificationBodyTitleMax),
-  "content": zod.string().min(1).max(sendAdminNotificationBodyContentMax)
+  "content": zod.string().min(1).max(sendAdminNotificationBodyContentMax),
+  "allow_replies": zod.boolean()
+})
+
+
+/**
+ * @summary List private responses to reply-enabled notices
+ */
+export const GetAdminNotificationRepliesResponseItem = zod.object({
+  "id": zod.string(),
+  "notification_id": zod.string(),
+  "notification_title": zod.string(),
+  "notification_type": zod.enum(['update', 'warning']),
+  "recipient_id": zod.string(),
+  "recipient_name": zod.string(),
+  "recipient_username": zod.string(),
+  "content": zod.string(),
+  "created_at": zod.coerce.date()
+})
+export const GetAdminNotificationRepliesResponse = zod.array(GetAdminNotificationRepliesResponseItem)
+
+
+/**
+ * @summary Update the signed-in user's profile details and picture
+ */
+export const updateMyProfileBodyUsernameMin = 3;
+export const updateMyProfileBodyUsernameMax = 32;
+
+export const updateMyProfileBodyStatusMax = 140;
+
+export const updateMyProfileBodyProfilePictureMax = 2048;
+
+
+
+export const UpdateMyProfileBody = zod.object({
+  "username": zod.string().min(updateMyProfileBodyUsernameMin).max(updateMyProfileBodyUsernameMax).optional(),
+  "status": zod.string().max(updateMyProfileBodyStatusMax).nullish(),
+  "profile_picture": zod.string().max(updateMyProfileBodyProfilePictureMax).nullish()
+})
+
+export const UpdateMyProfileResponse = zod.object({
+  "id": zod.string(),
+  "username": zod.string(),
+  "status": zod.string().nullable(),
+  "profile_picture": zod.string().nullable()
+})
+
+
+/**
+ * @summary List incoming friend requests for the signed-in user
+ */
+export const GetIncomingFriendRequestsResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "username": zod.string(),
+  "profile_picture": zod.string().nullable(),
+  "cover_photo": zod.string().nullable(),
+  "status": zod.string().nullable(),
+  "last_seen": zod.coerce.date(),
+  "is_verified": zod.boolean(),
+  "created_at": zod.coerce.date()
+})
+export const GetIncomingFriendRequestsResponse = zod.array(GetIncomingFriendRequestsResponseItem)
+
+
+/**
+ * @summary Send a friend request to a user
+ */
+export const SendFriendRequestParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const SendFriendRequestResponse = zod.object({
+  "status": zod.enum(['sent', 'contact', 'accepted', 'removed'])
+})
+
+
+/**
+ * @summary Decline an incoming request or cancel an outgoing request
+ */
+export const DeclineOrCancelFriendRequestParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const DeclineOrCancelFriendRequestResponse = zod.object({
+  "status": zod.enum(['sent', 'contact', 'accepted', 'removed'])
+})
+
+
+/**
+ * @summary Accept an incoming friend request
+ */
+export const AcceptFriendRequestParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const AcceptFriendRequestResponse = zod.object({
+  "status": zod.enum(['sent', 'contact', 'accepted', 'removed'])
 })
 
 
@@ -149,8 +246,7 @@ export const SendAdminChatBody = zod.object({
   "audience": zod.enum(['all', 'user']),
   "recipient_id": zod.string().min(1).optional(),
   "title": zod.string().min(1).max(sendAdminChatBodyTitleMax),
-  "content": zod.string().min(1).max(sendAdminChatBodyContentMax),
-  "allow_replies": zod.boolean()
+  "content": zod.string().min(1).max(sendAdminChatBodyContentMax)
 })
 
 
@@ -274,6 +370,13 @@ export const GetMyNotificationsResponseItem = zod.object({
   "title": zod.string(),
   "content": zod.string(),
   "read": zod.boolean(),
+  "allow_replies": zod.boolean(),
+  "replies": zod.array(zod.object({
+  "id": zod.string(),
+  "notification_id": zod.string(),
+  "content": zod.string(),
+  "created_at": zod.coerce.date()
+})),
   "created_at": zod.coerce.date(),
   "updated_at": zod.coerce.date()
 })
@@ -294,8 +397,31 @@ export const MarkNotificationReadResponse = zod.object({
   "title": zod.string(),
   "content": zod.string(),
   "read": zod.boolean(),
+  "allow_replies": zod.boolean(),
+  "replies": zod.array(zod.object({
+  "id": zod.string(),
+  "notification_id": zod.string(),
+  "content": zod.string(),
+  "created_at": zod.coerce.date()
+})),
   "created_at": zod.coerce.date(),
   "updated_at": zod.coerce.date()
+})
+
+
+/**
+ * @summary Reply privately to a notice that allows responses
+ */
+export const ReplyToNotificationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const replyToNotificationBodyContentMax = 2000;
+
+
+
+export const ReplyToNotificationBody = zod.object({
+  "content": zod.string().min(1).max(replyToNotificationBodyContentMax)
 })
 
 

@@ -23,4 +23,5 @@ export interface AdminNotificationInput {
      * @maxLength 2000
      */
   content: string;
+  allow_replies: boolean;
 }

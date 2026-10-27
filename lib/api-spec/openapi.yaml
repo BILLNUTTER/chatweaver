@@ -136,6 +136,141 @@ paths:
           description: Invalid administrator session
         "404":
           description: User not found
+  /admin/notification-replies:
+    get:
+      operationId: getAdminNotificationReplies
+      tags: [admin]
+      summary: List private responses to reply-enabled notices
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Notice responses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminNotificationReply"
+        "401":
+          description: Invalid administrator session
+  /profile:
+    patch:
+      operationId: updateMyProfile
+      tags: [profile]
+      summary: Update the signed-in user's profile details and picture
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdateInput"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileUpdateResult"
+        "400":
+          description: Invalid profile data
+        "401":
+          description: Invalid session
+        "409":
+          description: Username is already taken
+  /friend-requests:
+    get:
+      operationId: getIncomingFriendRequests
+      tags: [people]
+      summary: List incoming friend requests for the signed-in user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Incoming friend requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PublicProfile"
+        "401":
+          description: Invalid session
+  /friend-requests/{userId}:
+    post:
+      operationId: sendFriendRequest
+      tags: [people]
+      summary: Send a friend request to a user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request sent or user is already a contact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendRequestResult"
+        "401":
+          description: Invalid session
+        "404":
+          description: User not found
+        "409":
+          description: Request cannot be sent
+    delete:
+      operationId: declineOrCancelFriendRequest
+      tags: [people]
+      summary: Decline an incoming request or cancel an outgoing request
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Request removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendRequestResult"
+        "401":
+          description: Invalid session
+        "404":
+          description: Request not found
+  /friend-requests/{userId}/accept:
+    post:
+      operationId: acceptFriendRequest
+      tags: [people]
+      summary: Accept an incoming friend request
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Contact relationship established
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FriendRequestResult"
+        "401":
+          description: Invalid session
+        "404":
+          description: Incoming request not found
   /admin/chats:
     get:
       operationId: getAdminChats
@@ -403,6 +538,40 @@ paths:
           description: Invalid session
         "404":
           description: Notice not found
+  /notifications/{id}/replies:
+    post:
+      operationId: replyToNotification
+      tags: [notifications]
+      summary: Reply privately to a notice that allows responses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationReplyInput"
+      responses:
+        "201":
+          description: Private response saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationReply"
+        "400":
+          description: Invalid response
+        "401":
+          description: Invalid session
+        "403":
+          description: Replies are disabled for this notice
+        "404":
+          description: Notice not found
 components:
   securitySchemes:
     bearerAuth:
@@ -462,13 +631,27 @@ components:
         is_admin: { type: boolean }
     AdminNotificationInput:
       type: object
-      required: [audience, type, title, content]
+      required: [audience, type, title, content, allow_replies]
       properties:
         audience: { type: string, enum: [all, user] }
         recipient_id: { type: string, minLength: 1 }
         type: { type: string, enum: [update, warning] }
         title: { type: string, minLength: 1, maxLength: 120 }
         content: { type: string, minLength: 1, maxLength: 2000 }
+        allow_replies: { type: boolean }
+    AdminNotificationReply:
+      type: object
+      required: [id, notification_id, notification_title, notification_type, recipient_id, recipient_name, recipient_username, content, created_at]
+      properties:
+        id: { type: string }
+        notification_id: { type: string }
+        notification_title: { type: string }
+        notification_type: { type: string, enum: [update, warning] }
+        recipient_id: { type: string }
+        recipient_name: { type: string }
+        recipient_username: { type: string }
+        content: { type: string }
+        created_at: { type: string, format: date-time }
     AdminSendResult:
       type: object
       required: [sent]
@@ -476,13 +659,12 @@ components:
         sent: { type: integer, minimum: 0 }
     AdminChatInput:
       type: object
-      required: [audience, title, content, allow_replies]
+      required: [audience, title, content]
       properties:
         audience: { type: string, enum: [all, user] }
         recipient_id: { type: string, minLength: 1 }
         title: { type: string, minLength: 1, maxLength: 120 }
         content: { type: string, minLength: 1, maxLength: 2000 }
-        allow_replies: { type: boolean }
     AdminChatSendResult:
       type: object
       required: [campaign_id, sent]
@@ -540,7 +722,7 @@ components:
         ok: { type: boolean }
     SystemNotification:
       type: object
-      required: [id, recipient_id, type, title, content, read, created_at, updated_at]
+      required: [id, recipient_id, type, title, content, read, allow_replies, replies, created_at, updated_at]
       properties:
         id: { type: string }
         recipient_id: { type: string }
@@ -548,6 +730,43 @@ components:
         title: { type: string }
         content: { type: string }
         read: { type: boolean }
+        allow_replies: { type: boolean }
+        replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationReply"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    NotificationReplyInput:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1, maxLength: 2000 }
+    NotificationReply:
+      type: object
+      required: [id, notification_id, content, created_at]
+      properties:
+        id: { type: string }
+        notification_id: { type: string }
+        content: { type: string }
+        created_at: { type: string, format: date-time }
+    FriendRequestResult:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [sent, contact, accepted, removed] }
+    ProfileUpdateInput:
+      type: object
+      properties:
+        username: { type: string, minLength: 3, maxLength: 32 }
+        status: { type: ["string", "null"], maxLength: 140 }
+        profile_picture: { type: ["string", "null"], maxLength: 2048 }
+    ProfileUpdateResult:
+      type: object
+      required: [id, username, status, profile_picture]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        status: { type: ["string", "null"] }
+        profile_picture: { type: ["string", "null"] }
 

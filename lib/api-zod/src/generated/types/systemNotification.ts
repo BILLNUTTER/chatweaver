@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { NotificationReply } from './notificationReply';
 import type { SystemNotificationType } from './systemNotificationType';
 
 export interface SystemNotification {
@@ -14,6 +15,8 @@ export interface SystemNotification {
   title: string;
   content: string;
   read: boolean;
+  allow_replies: boolean;
+  replies: NotificationReply[];
   created_at: Date;
   updated_at: Date;
 }

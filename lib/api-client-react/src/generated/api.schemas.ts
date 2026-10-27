@@ -93,6 +93,27 @@ export interface AdminNotificationInput {
      * @maxLength 2000
      */
   content: string;
+  allow_replies: boolean;
+}
+
+export type AdminNotificationReplyNotificationType = typeof AdminNotificationReplyNotificationType[keyof typeof AdminNotificationReplyNotificationType];
+
+
+export const AdminNotificationReplyNotificationType = {
+  update: 'update',
+  warning: 'warning',
+} as const;
+
+export interface AdminNotificationReply {
+  id: string;
+  notification_id: string;
+  notification_title: string;
+  notification_type: AdminNotificationReplyNotificationType;
+  recipient_id: string;
+  recipient_name: string;
+  recipient_username: string;
+  content: string;
+  created_at: string;
 }
 
 export interface AdminSendResult {
@@ -122,7 +143,6 @@ export interface AdminChatInput {
      * @maxLength 2000
      */
   content: string;
-  allow_replies: boolean;
 }
 
 export interface AdminChatSendResult {
@@ -215,6 +235,13 @@ export const SystemNotificationType = {
   warning: 'warning',
 } as const;
 
+export interface NotificationReply {
+  id: string;
+  notification_id: string;
+  content: string;
+  created_at: string;
+}
+
 export interface SystemNotification {
   id: string;
   recipient_id: string;
@@ -222,7 +249,58 @@ export interface SystemNotification {
   title: string;
   content: string;
   read: boolean;
+  allow_replies: boolean;
+  replies: NotificationReply[];
   created_at: string;
   updated_at: string;
+}
+
+export interface NotificationReplyInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  content: string;
+}
+
+export type FriendRequestResultStatus = typeof FriendRequestResultStatus[keyof typeof FriendRequestResultStatus];
+
+
+export const FriendRequestResultStatus = {
+  sent: 'sent',
+  contact: 'contact',
+  accepted: 'accepted',
+  removed: 'removed',
+} as const;
+
+export interface FriendRequestResult {
+  status: FriendRequestResultStatus;
+}
+
+export interface ProfileUpdateInput {
+  /**
+     * @minLength 3
+     * @maxLength 32
+     */
+  username?: string;
+  /**
+     * @maxLength 140
+     * @nullable
+     */
+  status?: string | null;
+  /**
+     * @maxLength 2048
+     * @nullable
+     */
+  profile_picture?: string | null;
+}
+
+export interface ProfileUpdateResult {
+  id: string;
+  username: string;
+  /** @nullable */
+  status: string | null;
+  /** @nullable */
+  profile_picture: string | null;
 }
 
