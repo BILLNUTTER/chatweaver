@@ -115,11 +115,15 @@ router.post("/users", async (req, res) => {
 });
 
 router.patch("/users/:id", async (req, res) => {
+  const userId = readSessionUserId(req);
+  if (!userId || userId !== req.params.id) {
+    return res.status(401).json({ error: "Sign-in required." });
+  }
   const db = await getMongoDb();
   if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
   const input = req.body as Record<string, unknown>;
   const update: Record<string, unknown> = {};
-  for (const field of ["name", "username", "status", "profile_picture", "cover_photo", "friends", "friend_requests", "sent_requests", "last_seen"]) {
+  for (const field of ["name", "username", "status", "profile_picture", "cover_photo", "last_seen"]) {
     if (field in input) update[field] = input[field];
   }
   if ("username" in update) {
@@ -140,6 +144,10 @@ router.patch("/users/:id", async (req, res) => {
 });
 
 router.delete("/users/:id", async (req, res) => {
+  const userId = readSessionUserId(req);
+  if (!userId || userId !== req.params.id) {
+    return res.status(401).json({ error: "Sign-in required." });
+  }
   const db = await getMongoDb();
   if (!db) return res.status(503).json({ error: "MongoDB unavailable" });
   await db.collection("users").deleteOne({ id: req.params.id });

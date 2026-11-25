@@ -15,8 +15,6 @@ import {
   SendAdminChatBody,
   SendAdminChatMessageParams,
   SendAdminChatMessageBody,
-  SendMyAdminChatMessageParams,
-  SendMyAdminChatMessageBody,
 } from "@workspace/api-zod";
 import { asDate, getMongoDb } from "../lib/mongo";
 import { readSessionUserId } from "../lib/session";
@@ -43,7 +41,7 @@ function adminThreadShape(thread: Document, recipient: Document | null) {
     recipient_username: String(recipient?.username ?? ""),
     recipient_profile_picture: (recipient?.profile_picture as string | null) ?? null,
     title: String(thread.title ?? ""),
-    allow_replies: Boolean(thread.allow_replies),
+    allow_replies: false,
     last_message: String(thread.last_message ?? ""),
     last_sender: thread.last_sender === "user" ? "user" as const : "admin" as const,
     last_message_at: asDate(thread.last_message_at ?? thread.created_at).toISOString(),
@@ -57,7 +55,7 @@ function userThreadShape(thread: Document) {
   return {
     id: String(thread.id),
     title: String(thread.title ?? ""),
-    allow_replies: Boolean(thread.allow_replies),
+    allow_replies: false,
     last_message: String(thread.last_message ?? ""),
     last_sender: thread.last_sender === "user" ? "user" as const : "admin" as const,
     last_message_at: asDate(thread.last_message_at ?? thread.created_at).toISOString(),
@@ -142,7 +140,7 @@ router.post("/admin/chats", async (req, res): Promise<void> => {
     campaign_id: campaignId,
     recipient_id: String(recipient!.id),
     title,
-    allow_replies: parsed.data.allow_replies,
+    allow_replies: false,
     last_message: content,
     last_sender: "admin",
     last_message_at: timestamp,
@@ -311,59 +309,6 @@ router.get("/admin-chats/:id/messages", async (req, res): Promise<void> => {
     .sort({ created_at: 1 })
     .toArray();
   res.json(GetMyAdminChatMessagesResponse.parse(messages.map(messageShape)));
-});
-
-router.post("/admin-chats/:id/messages", async (req, res): Promise<void> => {
-  const userId = readSessionUserId(req);
-  if (!userId) {
-    res.status(401).json({ error: "Sign-in required." });
-    return;
-  }
-  const params = SendMyAdminChatMessageParams.safeParse(req.params);
-  const body = SendMyAdminChatMessageBody.safeParse(req.body);
-  if (!params.success || !body.success) {
-    res.status(400).json({ error: "Enter a message of up to 2,000 characters." });
-    return;
-  }
-  const content = trimmedBody(body.data.content);
-  if (!content) {
-    res.status(400).json({ error: "Enter a message." });
-    return;
-  }
-  const db = await getMongoDb();
-  if (!db) {
-    res.status(503).json({ error: "MongoDB unavailable" });
-    return;
-  }
-  const thread = await db.collection("admin_chat_threads").findOne({
-    id: params.data.id,
-    recipient_id: userId,
-  });
-  if (!thread) {
-    res.status(404).json({ error: "Admin chat not found." });
-    return;
-  }
-  if (!thread.allow_replies) {
-    res.status(403).json({ error: "Replies are turned off for this admin chat." });
-    return;
-  }
-  const timestamp = new Date();
-  const message = {
-    id: randomUUID(),
-    thread_id: params.data.id,
-    sender_type: "user",
-    content,
-    created_at: timestamp,
-  };
-  await db.collection("admin_chat_messages").insertOne(message);
-  await db.collection("admin_chat_threads").updateOne(
-    { id: params.data.id, recipient_id: userId },
-    {
-      $set: { last_message: content, last_sender: "user", last_message_at: timestamp },
-      $inc: { unread_for_admin: 1, user_reply_count: 1 },
-    },
-  );
-  res.status(201).json(messageShape(message));
 });
 
 router.patch("/admin-chats/:id/read", async (req, res): Promise<void> => {

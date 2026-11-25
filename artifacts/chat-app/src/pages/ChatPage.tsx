@@ -1,12 +1,22 @@
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatWindow } from "@/components/ChatWindow";
+import { WhatsChatSystemWindow } from "@/components/WhatsChatSystemWindow";
 import { EmptyState } from "@/components/EmptyState";
 import { useConversations } from "@/hooks/useConversations";
 
 export default function ChatPage() {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const { conversations, loading, refetch, markConversationRead, updateConversationPreview } = useConversations();
+  const [selectedAdminChatId, setSelectedAdminChatId] = useState<string | null>(null);
+  const { conversations, allConversations, loading, refetch, markConversationRead, updateConversationPreview } = useConversations();
+
+  useEffect(() => {
+    const pendingConversationId = window.sessionStorage.getItem("whatschat_open_conversation");
+    if (!pendingConversationId) return;
+    window.sessionStorage.removeItem("whatschat_open_conversation");
+    setSelectedAdminChatId(null);
+    setSelectedConversationId(pendingConversationId);
+  }, []);
 
   useEffect(() => {
     const viewport = window.visualViewport;
@@ -34,8 +44,19 @@ export default function ChatPage() {
     };
   }, []);
 
-  const handleSelectConversation = (id: string) => setSelectedConversationId(id);
-  const handleBack = () => setSelectedConversationId(null);
+  const handleSelectConversation = (id: string) => {
+    setSelectedAdminChatId(null);
+    setSelectedConversationId(id);
+  };
+  const handleSelectAdminChat = (id: string) => {
+    setSelectedConversationId(null);
+    setSelectedAdminChatId(id);
+  };
+  const handleBack = () => {
+    setSelectedConversationId(null);
+    setSelectedAdminChatId(null);
+  };
+  const hasSelectedChat = Boolean(selectedConversationId || selectedAdminChatId);
 
   return (
     <div
@@ -47,12 +68,14 @@ export default function ChatPage() {
     >
       <div className={`
         flex-shrink-0 h-full min-h-0 overflow-hidden
-        ${selectedConversationId ? "hidden md:flex" : "flex w-full"}
+        ${hasSelectedChat ? "hidden md:flex" : "flex w-full"}
         md:w-[380px] md:flex
       `}>
         <Sidebar
           selectedConversationId={selectedConversationId}
+          selectedAdminChatId={selectedAdminChatId}
           onSelectConversation={handleSelectConversation}
+          onSelectAdminChat={handleSelectAdminChat}
           conversations={conversations}
           conversationsLoading={loading}
           markConversationRead={markConversationRead}
@@ -62,12 +85,14 @@ export default function ChatPage() {
 
       <div className={`
         flex-1 h-full min-h-0 min-w-0 overflow-hidden
-        ${selectedConversationId ? "flex" : "hidden md:flex"}
+        ${hasSelectedChat ? "flex" : "hidden md:flex"}
       `}>
-        {selectedConversationId ? (
+        {selectedAdminChatId ? (
+          <WhatsChatSystemWindow threadId={selectedAdminChatId} onBack={handleBack} />
+        ) : selectedConversationId ? (
           <ChatWindow
             conversationId={selectedConversationId}
-            conversation={conversations.find(conversation => conversation.id === selectedConversationId) ?? null}
+            conversation={allConversations.find(conversation => conversation.id === selectedConversationId) ?? null}
             onConversationActivity={updateConversationPreview}
             onBack={handleBack}
           />

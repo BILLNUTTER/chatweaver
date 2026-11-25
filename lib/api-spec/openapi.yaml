@@ -275,7 +275,7 @@ paths:
     get:
       operationId: getAdminChats
       tags: [admin]
-      summary: List private admin chat threads and user responses
+      summary: List WhatsChat message deliveries and delivery status
       security:
         - bearerAuth: []
       responses:
@@ -292,7 +292,7 @@ paths:
     post:
       operationId: sendAdminChat
       tags: [admin]
-      summary: Start a private admin chat with all users or one user
+      summary: Send a one-way WhatsChat message to all users or one user
       security:
         - bearerAuth: []
       requestBody:
@@ -399,12 +399,12 @@ paths:
     get:
       operationId: getMyAdminChats
       tags: [admin-chats]
-      summary: List private WhatsChat messages for the signed-in user
+      summary: List one-way WhatsChat messages for the signed-in user
       security:
         - bearerAuth: []
       responses:
         "200":
-          description: User's admin chat threads
+          description: WhatsChat system-message threads
           content:
             application/json:
               schema:
@@ -435,39 +435,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AdminChatMessage"
-        "401":
-          description: Invalid session
-        "404":
-          description: Thread not found
-    post:
-      operationId: sendMyAdminChatMessage
-      tags: [admin-chats]
-      summary: Reply when the administrator has enabled responses
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminChatMessageInput"
-      responses:
-        "201":
-          description: Reply sent
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AdminChatMessage"
-        "400":
-          description: Replies are disabled or message is invalid
-        "403":
-          description: Replies are disabled for this thread
         "401":
           description: Invalid session
         "404":

@@ -11,13 +11,16 @@ export interface ConversationWithDetails extends DBConversation {
 
 export function useConversations() {
   const { user } = useAuth();
-  const [conversations, setConversations] = useState<ConversationWithDetails[]>([]);
+  const [allConversations, setAllConversations] = useState<ConversationWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const refreshInFlight = useRef(false);
+  const conversations = allConversations.filter(conversation =>
+    conversation.is_group || Boolean(conversation.last_message?.trim()),
+  );
 
   const fetchConversations = useCallback(async () => {
     if (!user) {
-      setConversations([]);
+      setAllConversations([]);
       setLoading(false);
       return;
     }
@@ -26,7 +29,7 @@ export function useConversations() {
 
     try {
       const convs: DBConversation[] = await getConversations(user.id);
-      const visibleConversations = convs
+      const baseConversations = convs
         .filter(c => !c.is_admin_chat)
         .map<ConversationWithDetails>(conversation => ({
           ...conversation,
@@ -37,9 +40,9 @@ export function useConversations() {
 
       // Refresh the server-owned conversation fields without clearing enriched
       // participant data that is already visible to the user.
-      setConversations(current => {
+      setAllConversations(current => {
         const currentById = new Map(current.map(conversation => [conversation.id, conversation]));
-        return visibleConversations.map(conversation => {
+        return baseConversations.map(conversation => {
           const previous = currentById.get(conversation.id);
           return previous
             ? {
@@ -73,8 +76,8 @@ export function useConversations() {
         console.warn("Could not load unread message counts", unreadResult.reason);
       }
 
-      setConversations(current =>
-        visibleConversations.map(conversation => {
+      setAllConversations(current =>
+        baseConversations.map(conversation => {
           const previous = current.find(item => item.id === conversation.id);
           const otherIds = conversation.participants.filter(id => id !== user.id);
           return {
@@ -100,8 +103,8 @@ export function useConversations() {
 
   // Instantly clear badge in local state; also clear unread_by in DB
   const markConversationRead = async (conversationId: string) => {
-    const conversation = conversations.find(item => item.id === conversationId);
-    setConversations(prev =>
+    const conversation = allConversations.find(item => item.id === conversationId);
+    setAllConversations(prev =>
       prev.map(c => c.id === conversationId ? { ...c, unread_count: 0 } : c)
     );
     if (user && conversation?.unread_by?.includes(user.id)) {
@@ -111,7 +114,7 @@ export function useConversations() {
   };
 
   const updateConversationPreview = (conversationId: string, lastMessage: string, lastMessageAt: string) => {
-    setConversations(current => current.map(conversation =>
+    setAllConversations(current => current.map(conversation =>
       conversation.id === conversationId
         ? { ...conversation, last_message: lastMessage, last_message_at: lastMessageAt }
         : conversation,
@@ -133,5 +136,5 @@ export function useConversations() {
     };
   }, [fetchConversations]);
 
-  return { conversations, loading, refetch: fetchConversations, markConversationRead, updateConversationPreview };
+  return { conversations, allConversations, loading, refetch: fetchConversations, markConversationRead, updateConversationPreview };
 }

@@ -12,11 +12,16 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const timeout = window.setTimeout(() => controller.abort(), 15_000);
   let response: Response;
   try {
+    const token = getMongoToken();
     response = await fetch(`/api${path}`, {
       ...init,
       cache: "no-store",
       signal: controller.signal,
-      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(init?.headers ?? {}),
+      },
     });
   } finally {
     window.clearTimeout(timeout);

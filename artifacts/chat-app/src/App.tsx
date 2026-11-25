@@ -5,8 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import AuthPage from "@/pages/AuthPage";
-import ChatPage from "@/pages/ChatPage";
 
+const ChatPage = lazy(() => import("@/pages/ChatPage"));
 const AdminPage = lazy(() => import("@/pages/AdminPage"));
 const PublicProfilePage = lazy(() => import("@/pages/PublicProfilePage"));
 

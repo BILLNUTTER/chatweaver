@@ -205,7 +205,7 @@ export const AcceptFriendRequestResponse = zod.object({
 
 
 /**
- * @summary List private admin chat threads and user responses
+ * @summary List WhatsChat message deliveries and delivery status
  */
 export const getAdminChatsResponseUnreadForAdminMin = 0;
 
@@ -233,7 +233,7 @@ export const GetAdminChatsResponse = zod.array(GetAdminChatsResponseItem)
 
 
 /**
- * @summary Start a private admin chat with all users or one user
+ * @summary Send a one-way WhatsChat message to all users or one user
  */
 
 export const sendAdminChatBodyTitleMax = 120;
@@ -296,7 +296,7 @@ export const MarkAdminChatReadResponse = zod.object({
 
 
 /**
- * @summary List private WhatsChat messages for the signed-in user
+ * @summary List one-way WhatsChat messages for the signed-in user
  */
 export const getMyAdminChatsResponseUnreadCountMin = 0;
 
@@ -330,22 +330,6 @@ export const GetMyAdminChatMessagesResponseItem = zod.object({
   "created_at": zod.coerce.date()
 })
 export const GetMyAdminChatMessagesResponse = zod.array(GetMyAdminChatMessagesResponseItem)
-
-
-/**
- * @summary Reply when the administrator has enabled responses
- */
-export const SendMyAdminChatMessageParams = zod.object({
-  "id": zod.coerce.string()
-})
-
-export const sendMyAdminChatMessageBodyContentMax = 2000;
-
-
-
-export const SendMyAdminChatMessageBody = zod.object({
-  "content": zod.string().min(1).max(sendMyAdminChatMessageBodyContentMax)
-})
 
 
 /**

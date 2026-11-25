@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  getGetAdminChatsQueryKey,
+  getGetAdminNotificationRepliesQueryKey,
   getGetAdminUsersQueryKey,
   useAdminLogin,
   useGetAdminUsers,
@@ -12,12 +12,12 @@ import {
 import type { AdminChatInput, AdminSession, AdminUser, AdminNotificationInput } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { Avatar } from "@/components/Avatar";
-import { AdminChatResponses } from "@/components/AdminChatResponses";
+import { AdminNotificationResponses } from "@/components/AdminNotificationResponses";
 import { AlertTriangle, BellRing, LockKeyhole, LogOut, MessageCircle, Search, ShieldCheck, Users } from "lucide-react";
 
 type LoginValues = { username: string; password: string };
-type NoticeValues = { audience: "all" | "user"; type: "update" | "warning"; title: string; content: string };
-type ChatValues = { audience: "all" | "user"; title: string; content: string; allow_replies: boolean };
+type NoticeValues = { audience: "all" | "user"; type: "update" | "warning"; title: string; content: string; allow_replies: boolean };
+type ChatValues = { audience: "all" | "user"; title: string; content: string };
 
 const SESSION_KEY = "whatschat_admin_session";
 const TOKEN_KEY = "admin_token";
@@ -45,8 +45,8 @@ export default function AdminPage() {
   const loginForm = useForm<LoginValues>({
     defaultValues: { username: new URLSearchParams(window.location.search).get("admin") ?? "", password: "" },
   });
-  const noticeForm = useForm<NoticeValues>({ defaultValues: { audience: "all", type: "update", title: "", content: "" } });
-  const chatForm = useForm<ChatValues>({ defaultValues: { audience: "all", title: "", content: "", allow_replies: false } });
+  const noticeForm = useForm<NoticeValues>({ defaultValues: { audience: "all", type: "update", title: "", content: "", allow_replies: false } });
+  const chatForm = useForm<ChatValues>({ defaultValues: { audience: "all", title: "", content: "" } });
   const login = useAdminLogin();
   const usersQuery = useGetAdminUsers({
     query: { enabled: Boolean(session), queryKey: getGetAdminUsersQueryKey(), staleTime: 30_000 },
@@ -82,11 +82,12 @@ export default function AdminPage() {
       type: values.type,
       title: values.title.trim(),
       content: values.content.trim(),
+      allow_replies: values.allow_replies,
     };
     sendNotice.mutate({ data: payload }, {
       onSuccess: result => {
         toast({ title: "Notice sent", description: `Delivered to ${result.sent} ${result.sent === 1 ? "user" : "users"}.` });
-        noticeForm.reset({ audience: "all", type: "update", title: "", content: "" });
+        noticeForm.reset({ audience: "all", type: "update", title: "", content: "", allow_replies: false });
       },
       onError: error => toast({ title: "Notice not sent", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" }),
     });
@@ -102,15 +103,13 @@ export default function AdminPage() {
       ...(values.audience === "user" && selectedUser ? { recipient_id: selectedUser.id } : {}),
       title: values.title.trim(),
       content: values.content.trim(),
-      allow_replies: values.allow_replies,
     };
     sendChat.mutate({ data: payload }, {
       onSuccess: result => {
-        toast({ title: "Admin chat sent", description: `Created private chats for ${result.sent} ${result.sent === 1 ? "user" : "users"}.` });
-        chatForm.reset({ audience: "all", title: "", content: "", allow_replies: false });
-        void queryClient.invalidateQueries({ queryKey: getGetAdminChatsQueryKey() });
+        toast({ title: "WhatsChat message sent", description: `Delivered to ${result.sent} ${result.sent === 1 ? "user" : "users"}.` });
+        chatForm.reset({ audience: "all", title: "", content: "" });
       },
-      onError: error => toast({ title: "Admin chat not sent", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" }),
+      onError: error => toast({ title: "WhatsChat message not sent", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" }),
     });
   });
 
@@ -120,7 +119,7 @@ export default function AdminPage() {
     setSession(null);
     setSelectedUser(null);
     queryClient.removeQueries({ queryKey: getGetAdminUsersQueryKey() });
-    queryClient.removeQueries({ queryKey: getGetAdminChatsQueryKey() });
+    queryClient.removeQueries({ queryKey: getGetAdminNotificationRepliesQueryKey() });
   };
 
   if (!session) {
@@ -193,7 +192,7 @@ export default function AdminPage() {
             <p className="p-8 text-center text-sm text-[#78908d]" data-testid="status-users-no-results">No people match “{filter}”.</p>
           ) : (
             <div className="divide-y divide-[#e5efed] dark:divide-[#294143]">
-              {visibleUsers.map(user => <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={() => { setSelectedUser(user); noticeForm.reset({ audience: "user", type: "update", title: "", content: "" }); chatForm.setValue("audience", "user"); }} />)}
+              {visibleUsers.map(user => <AdminUserRow key={user.id} user={user} selected={selectedUser?.id === user.id} onSelect={() => { setSelectedUser(user); noticeForm.reset({ audience: "user", type: "update", title: "", content: "", allow_replies: false }); chatForm.setValue("audience", "user"); }} />)}
             </div>
           )}
         </section>
@@ -202,7 +201,7 @@ export default function AdminPage() {
           <section className="h-fit rounded-2xl border border-[#d7e7e4] bg-[#fbfefd] dark:border-[#294143] dark:bg-[#172526]">
             <div className="border-b border-[#e0ecea] px-5 py-5 dark:border-[#294143]">
               <div className="flex items-center gap-2"><BellRing className="h-4 w-4 text-[#128c7e]" /><h2 className="font-semibold">Send a notice</h2></div>
-              <p className="mt-1 text-sm text-[#78908d] dark:text-[#9cb3b0]">One-way update or warning. Users cannot reply.</p>
+              <p className="mt-1 text-sm text-[#78908d] dark:text-[#9cb3b0]">An app notification. Replies are optional and stay private to each recipient.</p>
             </div>
             <form onSubmit={onSend} className="space-y-4 p-5" data-testid="form-admin-notice">
               <div>
@@ -231,6 +230,10 @@ export default function AdminPage() {
                 <p className="mt-1 text-right text-xs text-[#91a6a3]">{noticeForm.watch("content").length}/2000</p>
                 {noticeForm.formState.errors.content && <p className="mt-1 text-xs text-red-600" data-testid="error-notice-content">A message is required.</p>}
               </div>
+              <label className="flex items-start gap-3 rounded-xl bg-[#edf6f4] p-3 text-sm dark:bg-[#203334]">
+                <input type="checkbox" {...noticeForm.register("allow_replies")} className="mt-0.5 h-4 w-4 accent-[#128c7e]" data-testid="checkbox-notification-replies" />
+                <span><span className="font-semibold">Allow replies</span><span className="mt-0.5 block text-xs leading-5 text-[#78908d] dark:text-[#b0c8c4]">Each response is visible only to its sender and admins.</span></span>
+              </label>
               {noticeForm.watch("type") === "warning" && <p className="flex gap-2 rounded-lg bg-[#fff4e6] p-3 text-xs leading-5 text-[#8a5a1c] dark:bg-[#3b3021] dark:text-[#f0c98d]" data-testid="warning-notice-note"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Warnings should be reserved for important account or safety information.</p>}
               <button type="submit" disabled={sendNotice.isPending || (noticeForm.watch("audience") === "user" && !selectedUser)} className="w-full rounded-xl bg-[#128c7e] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0d7469] disabled:opacity-60" data-testid="button-send-notice">{sendNotice.isPending ? "Sending…" : noticeForm.watch("audience") === "all" ? "Send notice to everyone" : "Send one-way notice"}</button>
             </form>
@@ -238,8 +241,8 @@ export default function AdminPage() {
 
           <section className="h-fit rounded-2xl border border-[#d7e7e4] bg-[#fbfefd] dark:border-[#294143] dark:bg-[#172526]">
             <div className="border-b border-[#e0ecea] px-5 py-5 dark:border-[#294143]">
-              <div className="flex items-center gap-2"><MessageCircle className="h-4 w-4 text-[#128c7e]" /><h2 className="font-semibold">Start an admin chat</h2></div>
-              <p className="mt-1 text-sm text-[#78908d] dark:text-[#9cb3b0]">Private conversations. Turn replies on when you want responses.</p>
+              <div className="flex items-center gap-2"><MessageCircle className="h-4 w-4 text-[#128c7e]" /><h2 className="font-semibold">Send a WhatsChat message</h2></div>
+              <p className="mt-1 text-sm text-[#78908d] dark:text-[#9cb3b0]">One-way messages appear in the recipient’s Chats with WhatsChat as the sender.</p>
             </div>
             <form onSubmit={onSendChat} className="space-y-4 p-5" data-testid="form-admin-chat">
               <div>
@@ -253,22 +256,18 @@ export default function AdminPage() {
                 : <p className="rounded-lg bg-[#edf6f4] p-3 text-xs leading-5 text-[#52706d] dark:bg-[#203334] dark:text-[#b0c8c4]">Select a person from the directory before sending.</p>)}
               <div>
                 <label htmlFor="chat-title" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[#78908d]">Subject</label>
-                <input id="chat-title" maxLength={120} {...chatForm.register("title", { required: true, maxLength: 120 })} placeholder="What is this chat about?" className={inputClass} data-testid="input-admin-chat-title" />
+                <input id="chat-title" maxLength={120} {...chatForm.register("title", { required: true, maxLength: 120 })} placeholder="What is this message about?" className={inputClass} data-testid="input-admin-chat-title" />
               </div>
               <div>
                 <label htmlFor="chat-content" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[#78908d]">Message</label>
-                <textarea id="chat-content" rows={4} maxLength={2000} {...chatForm.register("content", { required: true, maxLength: 2000 })} placeholder="Write your message…" className={`${inputClass} resize-y`} data-testid="input-admin-chat-content" />
+                <textarea id="chat-content" rows={4} maxLength={2000} {...chatForm.register("content", { required: true, maxLength: 2000 })} placeholder="Write the message that will appear in Chats…" className={`${inputClass} resize-y`} data-testid="input-admin-chat-content" />
               </div>
-              <label className="flex items-start gap-3 rounded-xl bg-[#edf6f4] p-3 text-sm dark:bg-[#203334]">
-                <input type="checkbox" {...chatForm.register("allow_replies")} className="mt-0.5 h-4 w-4 accent-[#128c7e]" data-testid="checkbox-admin-chat-replies" />
-                <span><span className="font-semibold">Allow recipients to reply</span><span className="mt-0.5 block text-xs leading-5 text-[#78908d] dark:text-[#b0c8c4]">Each reply stays private between that user and the admin.</span></span>
-              </label>
-              <button type="submit" disabled={sendChat.isPending || (chatForm.watch("audience") === "user" && !selectedUser)} className="w-full rounded-xl bg-[#128c7e] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0d7469] disabled:opacity-60" data-testid="button-send-admin-chat">{sendChat.isPending ? "Sending…" : "Start admin chat"}</button>
+              <button type="submit" disabled={sendChat.isPending || (chatForm.watch("audience") === "user" && !selectedUser)} className="w-full rounded-xl bg-[#128c7e] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0d7469] disabled:opacity-60" data-testid="button-send-admin-chat">{sendChat.isPending ? "Sending…" : "Send to Chats"}</button>
             </form>
           </section>
         </div>
 
-        <AdminChatResponses />
+        <AdminNotificationResponses />
       </div>
     </main>
   );

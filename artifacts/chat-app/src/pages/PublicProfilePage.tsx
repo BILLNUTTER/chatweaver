@@ -1,16 +1,90 @@
-import { Link, useParams } from "wouter";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useParams } from "wouter";
 import { useGetPublicProfileByUsername, getGetPublicProfileByUsernameQueryKey } from "@workspace/api-client-react";
 import { ArrowLeft, CalendarDays, Check, Clock3, MessageCircle, UserRound } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
+import { useAuth } from "@/contexts/AuthContext";
+import { useContacts } from "@/hooks/useContacts";
+import { useToast } from "@/hooks/use-toast";
 
 export default function PublicProfilePage() {
   const params = useParams<{ username: string }>();
+  const [, navigate] = useLocation();
+  const { user, dbUser } = useAuth();
+  const { startConversation, addContact, acceptContact } = useContacts();
+  const { toast } = useToast();
+  const [profileActionPending, setProfileActionPending] = useState(false);
   const username = (params.username ?? "").replace(/^@/, "");
   const profileQuery = useGetPublicProfileByUsername(username, {
     query: { enabled: Boolean(username), queryKey: getGetPublicProfileByUsernameQueryKey(username), staleTime: 60_000 },
   });
   const profile = profileQuery.data;
   const online = profile?.last_seen ? Date.now() - new Date(profile.last_seen).getTime() < 5 * 60_000 : false;
+  const isSelf = Boolean(profile && user?.id === profile.id);
+  const isContact = Boolean(profile && dbUser?.friends?.includes(profile.id));
+  const requestSent = Boolean(profile && dbUser?.sent_requests?.includes(profile.id));
+  const hasIncomingRequest = Boolean(profile && dbUser?.friend_requests?.includes(profile.id));
+
+  useEffect(() => {
+    if (!profile) return;
+    const previousTitle = document.title;
+    const title = `${profile.name} on WhatsChat | Find friends and connect`;
+    const description = `View ${profile.name}'s WhatsChat profile. Join WhatsChat to find friends, chat with your community, and promote your business.`;
+    document.title = title;
+    for (const [selector, attribute, value] of [
+      ['meta[name="description"]', "content", description],
+      ['meta[property="og:title"]', "content", title],
+      ['meta[property="og:description"]', "content", description],
+      ['meta[property="og:url"]', "content", window.location.href],
+      ['meta[name="twitter:title"]', "content", title],
+      ['meta[name="twitter:description"]', "content", description],
+    ] as const) {
+      let element = document.head.querySelector<HTMLMetaElement>(selector);
+      if (!element) {
+        const isProperty = selector.includes("property=");
+        element = document.createElement("meta");
+        element.setAttribute(isProperty ? "property" : "name", selector.match(/["']([^"']+)["']/)?.[1] ?? "");
+        document.head.appendChild(element);
+      }
+      element.setAttribute(attribute, value);
+    }
+    return () => { document.title = previousTitle; };
+  }, [profile]);
+
+  const handleMessage = async () => {
+    if (!profile || !isContact || profileActionPending) return;
+    setProfileActionPending(true);
+    try {
+      const conversationId = await startConversation(profile.id);
+      if (!conversationId) throw new Error("Could not open this conversation.");
+      window.sessionStorage.setItem("whatschat_open_conversation", conversationId);
+      navigate("/");
+    } catch (error) {
+      toast({ title: "Chat not opened", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally {
+      setProfileActionPending(false);
+    }
+  };
+
+  const handleAddContact = async () => {
+    if (!profile || profileActionPending) return;
+    setProfileActionPending(true);
+    try {
+      if (hasIncomingRequest) {
+        const result = await acceptContact(profile.id);
+        if (result.error) throw new Error(result.error);
+        toast({ title: "Contact added", description: `You and ${profile.name} can now chat.` });
+      } else {
+        const result = await addContact(profile.id);
+        if (result.error) throw new Error(result.error);
+        if (result.status === "sent") toast({ title: "Request sent", description: "They’ll become a contact after accepting." });
+      }
+    } catch (error) {
+      toast({ title: "Request not completed", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally {
+      setProfileActionPending(false);
+    }
+  };
 
   return (
     <main className="min-h-[100dvh] bg-[#e8f3f1] px-4 py-6 dark:bg-[#101b1c]" data-testid="public-profile-page">
@@ -47,6 +121,21 @@ export default function PublicProfilePage() {
                 <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4" />Joined {new Date(profile.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
                 <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4" />{online ? "Available now" : "Not currently active"}</span>
               </div>
+              {user && !isSelf && (
+                <div className="mt-6 flex flex-wrap gap-3">
+                  {isContact ? (
+                    <button onClick={handleMessage} disabled={profileActionPending} className="inline-flex items-center gap-2 rounded-xl bg-[#128c7e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0d7469] disabled:opacity-50" data-testid="button-message-profile">
+                      <MessageCircle className="h-4 w-4" />{profileActionPending ? "Opening…" : "Message"}
+                    </button>
+                  ) : requestSent ? (
+                    <span className="rounded-xl bg-[#edf5f3] px-4 py-2.5 text-sm font-medium text-[#52706d] dark:bg-[#203334] dark:text-[#b0c8c4]">Request sent</span>
+                  ) : (
+                    <button onClick={handleAddContact} disabled={profileActionPending} className="inline-flex items-center gap-2 rounded-xl bg-[#128c7e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#0d7469] disabled:opacity-50" data-testid={hasIncomingRequest ? "button-accept-profile-request" : "button-add-profile-contact"}>
+                      <MessageCircle className="h-4 w-4" />{profileActionPending ? "Working…" : hasIncomingRequest ? "Accept request" : "Add contact"}
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="mt-6 rounded-xl border border-[#dcebe8] px-4 py-3 text-sm text-[#617c78] dark:border-[#294143] dark:text-[#a7bfbb]" data-testid="profile-privacy-note"><MessageCircle className="mr-2 inline h-4 w-4 text-[#128c7e]" />This is the public profile for @{profile.username}.</div>
             </div>
           </article>

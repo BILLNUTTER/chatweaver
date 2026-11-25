@@ -33,6 +33,9 @@
     "api/admin/notifications.js": {
       "includeFiles": "artifacts/api-server/dist/vercel/**"
     },
+    "api/admin/notification-replies.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
     "api/admin/chats.js": {
       "includeFiles": "artifacts/api-server/dist/vercel/**"
     },
@@ -51,10 +54,25 @@
     "api/admin-chats/[id]/read.js": {
       "includeFiles": "artifacts/api-server/dist/vercel/**"
     },
+    "api/profile.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/friend-requests.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/friend-requests/[userId].js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/friend-requests/[userId]/accept.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
     "api/notifications.js": {
       "includeFiles": "artifacts/api-server/dist/vercel/**"
     },
     "api/notifications/[id]/read.js": {
+      "includeFiles": "artifacts/api-server/dist/vercel/**"
+    },
+    "api/notifications/[id]/replies.js": {
       "includeFiles": "artifacts/api-server/dist/vercel/**"
     }
   },

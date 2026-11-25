@@ -1,12 +1,33 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import type { DBUser } from "@/lib/database.types";
-import { createConversation, getConversations, getUsers, updateUser } from "@/lib/storage";
+import {
+  getGetIncomingFriendRequestsQueryKey,
+  useAcceptFriendRequest,
+  useDeclineOrCancelFriendRequest,
+  useGetIncomingFriendRequests,
+  useSendFriendRequest,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { createConversation, getConversations, getUsers } from "@/lib/storage";
 
 export function useContacts() {
   const { user, dbUser, refreshUser } = useAuth();
   const [contacts, setContacts] = useState<DBUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const incomingRequestsQuery = useGetIncomingFriendRequests({
+    query: {
+      queryKey: getGetIncomingFriendRequestsQueryKey(),
+      enabled: Boolean(user),
+      staleTime: 10_000,
+      refetchInterval: 30_000,
+      refetchOnWindowFocus: true,
+    },
+  });
+  const sendRequest = useSendFriendRequest();
+  const acceptRequest = useAcceptFriendRequest();
+  const removeRequest = useDeclineOrCancelFriendRequest();
 
   const fetchContacts = async () => {
     if (!dbUser) { setLoading(false); return; }
@@ -25,24 +46,42 @@ export function useContacts() {
     return getUsers({ query: q, exclude: excludeIds });
   };
 
-  const addContact = async (userId: string): Promise<{ error?: string; user?: DBUser }> => {
+  const addContact = async (userId: string): Promise<{ error?: string; status?: string }> => {
     if (!user || !dbUser) return { error: "Not authenticated" };
     if (userId === user.id) return { error: "Cannot add yourself" };
-    if (dbUser.friends?.includes(userId)) return { error: "Already in contacts" };
-
-    const found = (await getUsers({ ids: [userId] }))[0] ?? null;
-    if (!found) return { error: "User not found" };
-
-    const newFriends = [...(dbUser.friends ?? []), userId];
+    if (dbUser.friends?.includes(userId)) return { status: "contact" };
     try {
-      await updateUser(user.id, { friends: newFriends });
+      const result = await sendRequest.mutateAsync({ userId });
+      await refreshUser();
+      void queryClient.invalidateQueries({ queryKey: getGetIncomingFriendRequestsQueryKey() });
+      await fetchContacts();
+      return { status: result.status };
     } catch {
       return { error: "Failed to add contact" };
     }
+  };
 
-    await refreshUser();
-    await fetchContacts();
-    return { user: found };
+  const acceptContact = async (userId: string): Promise<{ error?: string }> => {
+    try {
+      await acceptRequest.mutateAsync({ userId });
+      await refreshUser();
+      void queryClient.invalidateQueries({ queryKey: getGetIncomingFriendRequestsQueryKey() });
+      await fetchContacts();
+      return {};
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Could not accept request" };
+    }
+  };
+
+  const removeFriendRequest = async (userId: string): Promise<{ error?: string }> => {
+    try {
+      await removeRequest.mutateAsync({ userId });
+      await refreshUser();
+      void queryClient.invalidateQueries({ queryKey: getGetIncomingFriendRequestsQueryKey() });
+      return {};
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Could not remove request" };
+    }
   };
 
   const startConversation = async (contactId: string): Promise<string | null> => {
@@ -66,5 +105,16 @@ export function useContacts() {
     fetchContacts();
   }, [dbUser]);
 
-  return { contacts, loading, addContact, searchUsers, startConversation, refetch: fetchContacts };
+  return {
+    contacts,
+    loading,
+    incomingRequests: incomingRequestsQuery.data ?? [],
+    requestsLoading: incomingRequestsQuery.isLoading,
+    addContact,
+    acceptContact,
+    removeFriendRequest,
+    searchUsers,
+    startConversation,
+    refetch: fetchContacts,
+  };
 }

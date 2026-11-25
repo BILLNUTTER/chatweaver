@@ -27,14 +27,23 @@ export async function getMongoDb(): Promise<Db | null> {
       await db.command({ ping: 1 });
       await Promise.all([
         db.collection("messages").createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 }),
+        db.collection("messages").createIndex({ conversation_id: 1, created_at: 1 }),
         db.collection("messages").createIndex({ conversation_id: 1, sender_id: 1, expires_at: 1 }),
+        db.collection("conversations").createIndex({ id: 1 }),
+        db.collection("conversations").createIndex({ participants: 1, last_message_at: -1, updated_at: -1 }),
+        db.collection("users").createIndex({ id: 1 }),
         db.collection("users").createIndex({ email: 1 }, { unique: true, sparse: true }),
         db.collection("users").createIndex({ username: 1 }, { unique: true, sparse: true }),
+        db.collection("notifications").createIndex({ recipient_id: 1, created_at: -1 }),
+        db.collection("notifications").createIndex({ recipient_id: 1, read: 1, read_at: -1 }),
         db.collection("admin_chat_threads").createIndex({ id: 1 }, { unique: true }),
         db.collection("admin_chat_threads").createIndex({ recipient_id: 1, last_message_at: -1 }),
         db.collection("admin_chat_threads").createIndex({ last_message_at: -1 }),
         db.collection("admin_chat_messages").createIndex({ id: 1 }, { unique: true }),
         db.collection("admin_chat_messages").createIndex({ thread_id: 1, created_at: 1 }),
+        db.collection("notification_replies").createIndex({ id: 1 }, { unique: true }),
+        db.collection("notification_replies").createIndex({ recipient_id: 1, notification_id: 1, created_at: 1 }),
+        db.collection("notification_replies").createIndex({ created_at: -1 }),
       ]);
       logger.info({ database: databaseName }, "MongoDB is available");
       return db;

@@ -194,6 +194,7 @@ router.post("/admin/notifications", async (req, res): Promise<void> => {
     type: input.data.type,
     title: input.data.title.trim(),
     content: input.data.content.trim(),
+    allow_replies: input.data.allow_replies,
     read: false,
     created_at: timestamp,
     updated_at: timestamp,

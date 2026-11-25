@@ -1,9 +1,11 @@
 import { lazy, Suspense, useState, useEffect, useRef, type ReactNode } from "react";
+import { useLocation } from "wouter";
 import {
   MessageCircle, Users, Settings, Search, Plus, Moon, Sun, LogOut, BellRing, Share2,
   X, Check, Trash2, AlertTriangle, UserSearch
 } from "lucide-react";
 import { Avatar } from "./Avatar";
+import { WhatsChatAvatar } from "./WhatsChatAvatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import type { ConversationWithDetails } from "@/hooks/useConversations";
@@ -17,16 +19,21 @@ import {
   getGetMyNotificationsQueryKey,
   useGetMyAdminChats,
   useGetMyNotifications,
+  useUpdateMyProfile,
 } from "@workspace/api-client-react";
+import type { MyAdminChatThread } from "@workspace/api-client-react";
+import { SYSTEM_AVATARS, isValidProfilePicture } from "@/lib/profile-avatars";
 
 const SystemNotices = lazy(() => import("@/components/SystemNotices"));
 
 type Panel = "chats" | "contacts" | "updates" | "settings";
-type ContactTab = "my" | "find";
+type ContactTab = "my" | "find" | "requests";
 
 interface SidebarProps {
   selectedConversationId: string | null;
+  selectedAdminChatId: string | null;
   onSelectConversation: (id: string) => void;
+  onSelectAdminChat: (id: string) => void;
   conversations: ConversationWithDetails[];
   conversationsLoading: boolean;
   markConversationRead: (id: string) => Promise<void>;
@@ -35,20 +42,61 @@ interface SidebarProps {
 
 interface GlobalResults {
   chats: ConversationWithDetails[];
+  systemChats: MyAdminChatThread[];
   contacts: DBUser[];
   others: DBUser[];
 }
 
+function SystemMessageRow({
+  thread,
+  selected,
+  onClick,
+  chatTime,
+}: {
+  thread: MyAdminChatThread;
+  selected: boolean;
+  onClick: () => void;
+  chatTime: (value: string) => string;
+}) {
+  return (
+    <button
+      key={thread.id}
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 ${selected ? "bg-gray-100 dark:bg-gray-800" : ""}`}
+      data-testid={`button-open-whatschat-message-${thread.id}`}
+    >
+      <WhatsChatAvatar />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold text-gray-900 dark:text-white">WhatsChat</span>
+          <time className="shrink-0 text-xs text-gray-400 dark:text-gray-500">{chatTime(thread.last_message_at)}</time>
+        </span>
+        <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
+          {thread.title ? `${thread.title}: ` : ""}{thread.last_message}
+        </span>
+      </span>
+      {thread.unread_count > 0 && (
+        <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#25D366] px-1 text-[10px] font-bold text-white">
+          {thread.unread_count}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function Sidebar({
   selectedConversationId,
+  selectedAdminChatId,
   onSelectConversation,
+  onSelectAdminChat,
   conversations,
   conversationsLoading: convsLoading,
   markConversationRead,
   refetchConversations,
 }: SidebarProps) {
+  const [, navigate] = useLocation();
   const { user, dbUser, signOut, deleteAccount, refreshUser } = useAuth();
-  const { contacts, loading: contactsLoading, addContact, searchUsers, startConversation } = useContacts();
+  const { contacts, loading: contactsLoading, incomingRequests, requestsLoading, addContact, acceptContact, removeFriendRequest, searchUsers } = useContacts();
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const noticesQuery = useGetMyNotifications({
@@ -69,7 +117,9 @@ export function Sidebar({
   });
   const unreadNotices = noticesQuery.data?.filter(notice => !notice.read).length ?? 0;
   const unreadAdminChats = adminChatsQuery.data?.reduce((total, thread) => total + thread.unread_count, 0) ?? 0;
-  const unreadUpdates = unreadNotices + unreadAdminChats;
+  const unreadChats = conversations.reduce((total, conversation) => total + conversation.unread_count, 0) + unreadAdminChats;
+  const unreadUpdates = unreadNotices;
+  const updateProfileMutation = useUpdateMyProfile();
 
   const [panel, setPanel] = useState<Panel>("chats");
   const [contactTab, setContactTab] = useState<ContactTab>("find");
@@ -90,13 +140,17 @@ export function Sidebar({
   const [deleteError, setDeleteError] = useState("");
   const [profileUsername, setProfileUsername] = useState("");
   const [profileStatus, setProfileStatus] = useState("");
+  const [profilePicture, setProfilePicture] = useState("");
+  const [profilePictureUrl, setProfilePictureUrl] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
 
   useEffect(() => {
     if (!dbUser) return;
     setProfileUsername(dbUser.username);
     setProfileStatus(dbUser.status ?? "");
-  }, [dbUser?.id]);
+    setProfilePicture(dbUser.profile_picture ?? "");
+    setProfilePictureUrl(dbUser.profile_picture?.startsWith("avatar:") ? "" : dbUser.profile_picture ?? "");
+  }, [dbUser?.id, dbUser?.profile_picture]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -108,15 +162,18 @@ export function Sidebar({
         const name = c.is_group ? c.group_name : c.other_user?.name;
         return name?.toLowerCase().includes(q.toLowerCase());
       });
+      const matchedSystemChats = (adminChatsQuery.data ?? []).filter(thread =>
+        `${thread.title} ${thread.last_message}`.toLowerCase().includes(q.toLowerCase()),
+      );
       const allUsers = await searchUsers(q);
       const chatUserIds = new Set(matchedChats.map(c => c.other_user?.id).filter(Boolean));
       const matchedContacts = allUsers.filter(u => dbUser?.friends?.includes(u.id) && !chatUserIds.has(u.id));
       const matchedOthers = allUsers.filter(u => !dbUser?.friends?.includes(u.id) && !chatUserIds.has(u.id));
-      setGlobalResults({ chats: matchedChats, contacts: matchedContacts, others: matchedOthers });
+      setGlobalResults({ chats: matchedChats, systemChats: matchedSystemChats, contacts: matchedContacts, others: matchedOthers });
       setSearchLoading(false);
     }, 300);
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
-  }, [search, conversations]);
+  }, [search, conversations, adminChatsQuery.data]);
 
   useEffect(() => {
     if (contactTab !== "find" || panel !== "contacts") return;
@@ -133,20 +190,47 @@ export function Sidebar({
 
   const handleAddContact = async (userId: string) => {
     setAddingId(userId);
-    await addContact(userId);
+    const result = await addContact(userId);
     setAddingId(null);
-    setContactTab("my");
+    if (result.error) {
+      toast({ title: "Request not sent", description: result.error, variant: "destructive" });
+    } else if (result.status === "sent") {
+      toast({ title: "Request sent", description: "They’ll become a contact after accepting." });
+    } else if (result.status === "contact") {
+      toast({ title: "Already contacts", description: "You can find them in My Contacts." });
+    }
   };
 
-  const handleUserClick = async (userId: string) => {
-    const convId = await startConversation(userId);
-    if (convId) {
-      await refetchConversations();
-      await markConversationRead(convId);
-      onSelectConversation(convId);
-      setPanel("chats");
-      setSearch("");
+  const handleAcceptRequest = async (userId: string) => {
+    setAddingId(userId);
+    try {
+      const result = await acceptContact(userId);
+      if (result.error) {
+        toast({ title: "Request not accepted", description: result.error, variant: "destructive" });
+      } else {
+        toast({ title: "Contact added", description: "You can now find each other in My Contacts." });
+      }
+    } finally {
+      setAddingId(null);
     }
+  };
+
+  const handleRemoveRequest = async (userId: string) => {
+    setAddingId(userId);
+    try {
+      const result = await removeFriendRequest(userId);
+      if (result.error) {
+        toast({ title: "Request not removed", description: result.error, variant: "destructive" });
+      }
+    } finally {
+      setAddingId(null);
+    }
+  };
+
+  const handleUserClick = (profile: Pick<DBUser, "username">) => {
+    if (!profile.username) return;
+    navigate(`/u/${encodeURIComponent(profile.username)}`);
+    setSearch("");
   };
 
   const handleDeleteAccount = async () => {
@@ -159,14 +243,20 @@ export function Sidebar({
 
   const handleSaveProfile = async () => {
     if (!user) return;
+    const picture = profilePicture.trim() || null;
+    if (picture && !isValidProfilePicture(picture)) {
+      toast({ title: "Profile picture not saved", description: "Choose a system avatar or enter a valid HTTP(S) image link.", variant: "destructive" });
+      return;
+    }
     setProfileSaving(true);
     try {
-      await updateUser(user.id, {
+      await updateProfileMutation.mutateAsync({ data: {
         username: profileUsername.trim().toLowerCase(),
-        status: profileStatus.trim(),
-      });
+        status: profileStatus.trim() || null,
+        profile_picture: picture,
+      } });
       await refreshUser();
-      toast({ title: "Profile updated", description: "Your username and status were saved." });
+      toast({ title: "Profile updated", description: "Your profile details and picture were saved." });
     } catch (error) {
       toast({
         title: "Profile not saved",
@@ -202,13 +292,17 @@ export function Sidebar({
 
   const handleShareApp = () => {
     const inviteUrl = makeShareUrl("", true);
-    void shareLink(inviteUrl, "Join me on WhatsChat", "Register on WhatsChat and start chatting with me.");
+    void shareLink(
+      inviteUrl,
+      "Join WhatsChat",
+      "Join WhatsChat to find friends, chat with your community, and promote your business. More people are moving here—come connect with them.",
+    );
   };
 
   const handleShareProfile = () => {
     if (!dbUser?.username) return;
     const profileUrl = makeShareUrl(`u/${encodeURIComponent(dbUser.username)}`);
-    void shareLink(profileUrl, `${dbUser.name} on WhatsChat`, `View ${dbUser.name}'s WhatsChat profile.`);
+    void shareLink(profileUrl, `${dbUser.name} on WhatsChat`, `View ${dbUser.name}'s WhatsChat profile and connect with them.`);
   };
 
   const isOnline = (lastSeen?: string | null) => {
@@ -230,7 +324,7 @@ export function Sidebar({
   };
 
   const totalSearchResults = globalResults
-    ? globalResults.chats.length + globalResults.contacts.length + globalResults.others.length
+    ? globalResults.chats.length + globalResults.systemChats.length + globalResults.contacts.length + globalResults.others.length
     : 0;
 
   return (
@@ -261,13 +355,13 @@ export function Sidebar({
         <div className="mb-3">
           <Avatar src={dbUser?.profile_picture} name={dbUser?.name ?? "U"} size="sm" online />
         </div>
-        <NavBtn active={panel === "chats"} onClick={() => setPanel("chats")} title="Chats">
+        <NavBtn active={panel === "chats"} onClick={() => setPanel("chats")} title={unreadChats ? `Chats (${unreadChats} unread)` : "Chats"}>
           <MessageCircle className="w-5 h-5" />
         </NavBtn>
         <NavBtn active={panel === "contacts"} onClick={() => setPanel("contacts")} title="People">
           <Users className="w-5 h-5" />
         </NavBtn>
-        <NavBtn active={panel === "updates"} onClick={() => setPanel("updates")} title={unreadUpdates ? `Updates (${unreadUpdates} unread)` : "Updates"}>
+        <NavBtn active={panel === "updates"} onClick={() => setPanel("updates")} title={unreadUpdates ? `App notifications (${unreadUpdates} unread)` : "App notifications"}>
           <BellRing className="w-5 h-5" />
           {unreadUpdates > 0 && <span className="absolute -right-1 -top-1 min-w-4 h-4 rounded-full bg-red-500 px-1 text-[9px] font-bold leading-4 text-white">{unreadUpdates > 9 ? "9+" : unreadUpdates}</span>}
         </NavBtn>
@@ -341,13 +435,27 @@ export function Sidebar({
                         })}
                       </section>
                     )}
+                    {globalResults!.systemChats.length > 0 && (
+                      <section>
+                        <SectionLabel>WhatsChat</SectionLabel>
+                        {globalResults!.systemChats.map(thread => (
+                          <SystemMessageRow
+                            key={thread.id}
+                            thread={thread}
+                            selected={selectedAdminChatId === thread.id}
+                            onClick={() => { onSelectAdminChat(thread.id); setSearch(""); }}
+                            chatTime={chatTime}
+                          />
+                        ))}
+                      </section>
+                    )}
                     {globalResults!.contacts.length > 0 && (
                       <section>
                         <SectionLabel>Contacts</SectionLabel>
                         {globalResults!.contacts.map(u => (
                           <UserRow key={u.id} u={u} isContact isFriend
                             online={onlineProp(u.last_seen)}
-                            onChat={() => handleUserClick(u.id)}
+                            onChat={() => handleUserClick(u)}
                             onAdd={() => handleAddContact(u.id)}
                             adding={addingId === u.id}
                           />
@@ -360,7 +468,7 @@ export function Sidebar({
                         {globalResults!.others.map(u => (
                           <UserRow key={u.id} u={u} isContact={false} isFriend={false}
                             online={onlineProp(u.last_seen)}
-                            onChat={() => handleUserClick(u.id)}
+                            onChat={() => handleUserClick(u)}
                             onAdd={() => handleAddContact(u.id)}
                             adding={addingId === u.id}
                           />
@@ -370,39 +478,58 @@ export function Sidebar({
                   </>
                 )
               ) : (
-                convsLoading && conversations.length === 0 ? <LoadingList /> :
-                conversations.length === 0 ? (
+                convsLoading && conversations.length === 0 && adminChatsQuery.isLoading ? <LoadingList /> :
+                conversations.length === 0 && (adminChatsQuery.data ?? []).length === 0 ? (
                   <EmptyHint icon={<MessageCircle className="w-8 h-8" />}
                     text="No chats yet — go to People to find someone" />
-                ) : conversations.map(conv => {
-                  const name = conv.is_group ? (conv.group_name ?? "Group") : (conv.other_user?.name ?? "Unknown");
-                  const pic = conv.is_group ? conv.group_photo : conv.other_user?.profile_picture;
-                  const online = !conv.is_group ? onlineProp(conv.other_user?.last_seen) : undefined;
-                  return (
-                    <button key={conv.id} onClick={() => { markConversationRead(conv.id); onSelectConversation(conv.id); }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left ${selectedConversationId === conv.id ? "bg-gray-100 dark:bg-gray-800" : ""}`}>
-                      <Avatar src={pic} name={name} size="md" online={online} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-gray-900 dark:text-white text-sm truncate">{name}</span>
-                          {conv.last_message_at && (
-                            <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 flex-shrink-0">{chatTime(conv.last_message_at)}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between mt-0.5">
-                          <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[160px]">
-                            {conv.last_message ?? "Start a conversation"}
-                          </span>
-                          {conv.unread_count > 0 && conv.id !== selectedConversationId && (
-                            <span className="ml-2 flex-shrink-0 w-5 h-5 rounded-full bg-[#25D366] flex items-center justify-center text-white text-[10px] font-bold">
-                              {conv.unread_count}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
+                ) : (
+                  <>
+                    {(adminChatsQuery.data ?? []).length > 0 && (
+                      <section>
+                        <SectionLabel>WhatsChat</SectionLabel>
+                        {(adminChatsQuery.data ?? []).map(thread => (
+                          <SystemMessageRow
+                            key={thread.id}
+                            thread={thread}
+                            selected={selectedAdminChatId === thread.id}
+                            onClick={() => onSelectAdminChat(thread.id)}
+                            chatTime={chatTime}
+                          />
+                        ))}
+                      </section>
+                    )}
+                    {conversations.length > 0 && (
+                      <section>
+                        {adminChatsQuery.data?.length ? <SectionLabel>Your chats</SectionLabel> : null}
+                        {conversations.map(conv => {
+                          const name = conv.is_group ? (conv.group_name ?? "Group") : (conv.other_user?.name ?? "Unknown");
+                          const pic = conv.is_group ? conv.group_photo : conv.other_user?.profile_picture;
+                          const online = !conv.is_group ? onlineProp(conv.other_user?.last_seen) : undefined;
+                          return (
+                            <button key={conv.id} onClick={() => { markConversationRead(conv.id); onSelectConversation(conv.id); }}
+                              className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left ${selectedConversationId === conv.id ? "bg-gray-100 dark:bg-gray-800" : ""}`}>
+                              <Avatar src={pic} name={name} size="md" online={online} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-semibold text-gray-900 dark:text-white text-sm truncate">{name}</span>
+                                  {conv.last_message_at && (
+                                    <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 flex-shrink-0">{chatTime(conv.last_message_at)}</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-between mt-0.5">
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[160px]">{conv.last_message}</span>
+                                  {conv.unread_count > 0 && conv.id !== selectedConversationId && (
+                                    <span className="ml-2 flex-shrink-0 w-5 h-5 rounded-full bg-[#25D366] flex items-center justify-center text-white text-[10px] font-bold">{conv.unread_count}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </section>
+                    )}
+                  </>
+                )
               )}
             </div>
           </>
@@ -413,7 +540,7 @@ export function Sidebar({
           <>
             <div className="px-4 pt-4 pb-3">
               <h2 className="hidden md:block text-base font-bold text-gray-900 dark:text-white mb-3">People</h2>
-              <div className="flex rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5 mb-3 transition-colors duration-200">
+              <div className="grid grid-cols-3 rounded-lg bg-gray-100 dark:bg-gray-800 p-0.5 mb-3 transition-colors duration-200">
                 <button onClick={() => setContactTab("find")}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${contactTab === "find" ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>
                   Find People
@@ -421,6 +548,10 @@ export function Sidebar({
                 <button onClick={() => setContactTab("my")}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${contactTab === "my" ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>
                   My Contacts ({contacts.length})
+                </button>
+                <button onClick={() => setContactTab("requests")}
+                  className={`flex items-center justify-center gap-1 py-1.5 text-xs font-medium rounded-md transition-colors ${contactTab === "requests" ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}>
+                  Requests{incomingRequests.length > 0 && <span className="rounded-full bg-[#25D366] px-1.5 text-[9px] font-bold text-white">{incomingRequests.length}</span>}
                 </button>
               </div>
               {contactTab === "find" && (
@@ -459,7 +590,7 @@ export function Sidebar({
                   <EmptyHint icon={<UserSearch className="w-8 h-8" />} text={findQuery ? "No users found" : "No other users registered yet"} />
                 ) : findResults.map(u => (
                   <div key={u.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                    <button onClick={() => handleUserClick(u.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                  <button onClick={() => handleUserClick(u)} className="flex items-center gap-3 flex-1 min-w-0 text-left">
                       <Avatar src={u.profile_picture} name={u.name} size="md" online={onlineProp(u.last_seen)} />
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-900 dark:text-white text-sm truncate">{u.name}</p>
@@ -472,6 +603,13 @@ export function Sidebar({
                       <span className="flex items-center gap-1 text-xs text-[#128C7E] flex-shrink-0">
                         <Check className="w-3.5 h-3.5" /> Added
                       </span>
+                    ) : dbUser?.friend_requests?.includes(u.id) ? (
+                      <button onClick={() => handleAcceptRequest(u.id)} disabled={addingId === u.id}
+                        className="rounded-lg bg-[#128C7E] px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+                        Accept
+                      </button>
+                    ) : dbUser?.sent_requests?.includes(u.id) ? (
+                      <span className="flex-shrink-0 text-xs text-gray-500 dark:text-gray-400">Request sent</span>
                     ) : (
                       <button onClick={() => handleAddContact(u.id)} disabled={addingId === u.id}
                         className="flex items-center gap-1 text-xs bg-[#128C7E] hover:bg-[#0f7066] text-white px-2.5 py-1.5 rounded-lg font-medium disabled:opacity-50 flex-shrink-0 transition-colors">
@@ -491,7 +629,7 @@ export function Sidebar({
                 ) : contacts.filter(c =>
                    !findQuery || c.name.toLowerCase().includes(findQuery.toLowerCase()) || c.username.toLowerCase().includes(findQuery.toLowerCase())
                 ).map(contact => (
-                  <button key={contact.id} onClick={() => handleUserClick(contact.id)}
+                  <button key={contact.id} onClick={() => handleUserClick(contact)}
                     className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left">
                     <Avatar src={contact.profile_picture} name={contact.name} size="md" online={onlineProp(contact.last_seen)} />
                     <div className="flex-1 min-w-0">
@@ -502,6 +640,26 @@ export function Sidebar({
                       <span className="text-xs text-green-500 flex-shrink-0">online</span>
                     )}
                   </button>
+                ))
+              )}
+              {contactTab === "requests" && (
+                requestsLoading ? <LoadingList /> :
+                incomingRequests.length === 0 ? (
+                  <EmptyHint icon={<Users className="w-8 h-8" />} text="No friend requests yet" />
+                ) : incomingRequests.map(request => (
+                  <div key={request.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <button onClick={() => handleUserClick(request)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                      <Avatar src={request.profile_picture} name={request.name} size="md" online={onlineProp(request.last_seen)} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-gray-900 dark:text-white">{request.name}</span>
+                        <span className="block truncate text-xs text-gray-500 dark:text-gray-400">@{request.username}</span>
+                      </span>
+                    </button>
+                    <button onClick={() => handleAcceptRequest(request.id)} disabled={addingId === request.id}
+                      className="rounded-lg bg-[#128C7E] px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Accept</button>
+                    <button onClick={() => handleRemoveRequest(request.id)} disabled={addingId === request.id}
+                      className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 dark:border-gray-700 dark:text-gray-300">Decline</button>
+                  </div>
                 ))
               )}
             </div>
@@ -520,7 +678,7 @@ export function Sidebar({
             {dbUser && (
               <div className="p-4">
                 <div className="flex flex-col items-center gap-3 py-5 border-b border-gray-100 dark:border-gray-800 mb-4">
-                  <Avatar src={dbUser.profile_picture} name={dbUser.name} size="xl" online />
+                  <Avatar src={profilePicture || null} name={dbUser.name} size="xl" online />
                   <div className="text-center">
                     <p className="font-bold text-gray-900 dark:text-white">{dbUser.name}</p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">@{dbUser.username}</p>
@@ -554,6 +712,37 @@ export function Sidebar({
                        className="mt-1 w-full resize-none px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#128C7E]"
                      />
                    </div>
+                    <div className="space-y-2">
+                      <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">Profile picture</span>
+                      <div className="grid grid-cols-6 gap-2" role="group" aria-label="Choose a system avatar">
+                        {SYSTEM_AVATARS.map(avatar => (
+                          <button
+                            key={avatar.id}
+                            type="button"
+                            onClick={() => { setProfilePicture(avatar.id); setProfilePictureUrl(""); }}
+                            aria-label={`${avatar.label} avatar`}
+                            aria-pressed={profilePicture === avatar.id}
+                            className={`grid aspect-square place-items-center rounded-xl border text-2xl transition-colors ${profilePicture === avatar.id ? "border-[#128C7E] bg-[#e6f3f0] ring-2 ring-[#128C7E]/20 dark:bg-[#203d3a]" : "border-gray-200 bg-gray-50 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"}`}
+                          >
+                            {avatar.emoji}
+                          </button>
+                        ))}
+                      </div>
+                      <label className="block text-xs text-gray-500 dark:text-gray-400" htmlFor="profile-picture-url">Or use an image link</label>
+                      <input
+                        id="profile-picture-url"
+                        type="url"
+                        value={profilePictureUrl}
+                        onChange={event => {
+                          const value = event.target.value;
+                          setProfilePictureUrl(value);
+                          setProfilePicture(value.trim());
+                        }}
+                        placeholder="https://example.com/profile.jpg"
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#128C7E]"
+                        data-testid="input-profile-picture-url"
+                      />
+                    </div>
                    <button
                      onClick={handleSaveProfile}
                      disabled={profileSaving || !profileUsername.trim()}
@@ -569,7 +758,7 @@ export function Sidebar({
                         <Share2 className="h-4 w-4 text-[#128C7E]" />Share profile
                       </button>
                     </div>
-                    <p className="text-xs leading-5 text-gray-400 dark:text-gray-500">Profile photo uploads are paused until secure file storage is connected.</p>
+                     <p className="text-xs leading-5 text-gray-400 dark:text-gray-500">Choose a system avatar or paste a public image URL. File uploads aren’t supported.</p>
                    <SettingRow label="Contacts" value={`${dbUser.friends?.length ?? 0} people`} />
                  </div>
                 {!showDeleteConfirm ? (
@@ -607,7 +796,7 @@ export function Sidebar({
       </div>
 
       <nav className="md:hidden flex flex-shrink-0 border-t border-gray-200 bg-[#fbfefd] px-1 pt-1 dark:border-gray-800 dark:bg-gray-900 pb-[env(safe-area-inset-bottom)]" aria-label="Main navigation">
-        <MobileTabBtn label="Chats" active={panel === "chats"} onClick={() => setPanel("chats")} icon={<MessageCircle className="h-5 w-5" />} />
+        <MobileTabBtn label="Chats" active={panel === "chats"} onClick={() => setPanel("chats")} icon={<MessageCircle className="h-5 w-5" />} badge={unreadChats} />
         <MobileTabBtn label="People" active={panel === "contacts"} onClick={() => setPanel("contacts")} icon={<Users className="h-5 w-5" />} />
         <MobileTabBtn
           label="Updates"
