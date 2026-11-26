@@ -11,7 +11,7 @@ export default function PublicProfilePage() {
   const params = useParams<{ username: string }>();
   const [, navigate] = useLocation();
   const { user, dbUser } = useAuth();
-  const { startConversation, addContact, acceptContact } = useContacts();
+  const { contacts, startConversation, addContact, acceptContact } = useContacts();
   const { toast } = useToast();
   const [profileActionPending, setProfileActionPending] = useState(false);
   const username = (params.username ?? "").replace(/^@/, "");
@@ -21,7 +21,7 @@ export default function PublicProfilePage() {
   const profile = profileQuery.data;
   const online = profile?.last_seen ? Date.now() - new Date(profile.last_seen).getTime() < 5 * 60_000 : false;
   const isSelf = Boolean(profile && user?.id === profile.id);
-  const isContact = Boolean(profile && dbUser?.friends?.includes(profile.id));
+  const isContact = Boolean(profile && contacts.some(contact => contact.id === profile.id));
   const requestSent = Boolean(profile && dbUser?.sent_requests?.includes(profile.id));
   const hasIncomingRequest = Boolean(profile && dbUser?.friend_requests?.includes(profile.id));
 
@@ -87,7 +87,7 @@ export default function PublicProfilePage() {
   };
 
   return (
-    <main className="min-h-[100dvh] bg-[#e8f3f1] px-4 py-6 dark:bg-[#101b1c]" data-testid="public-profile-page">
+    <main className="h-[100dvh] overflow-y-auto overscroll-contain bg-[#e8f3f1] px-4 py-6 dark:bg-[#101b1c]" data-testid="public-profile-page">
       <div className="mx-auto max-w-2xl">
         <Link href="/" className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-[#52706d] transition-colors hover:bg-white/60 dark:text-[#b0c8c4] dark:hover:bg-[#203334]" data-testid="link-back-to-chats"><ArrowLeft className="h-4 w-4" />Back to WhatsChat</Link>
         {profileQuery.isLoading ? (

@@ -732,6 +732,83 @@ export function useGetIncomingFriendRequests<TData = Awaited<ReturnType<typeof g
 
 
 
+export const getGetMyContactsUrl = () => {
+
+
+
+
+  return `/api/contacts`
+}
+
+/**
+ * @summary List mutually accepted contacts for the signed-in user
+ */
+export const getMyContacts = async ( options?: RequestInit): Promise<PublicProfile[]> => {
+
+  return customFetch<PublicProfile[]>(getGetMyContactsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyContactsQueryKey = () => {
+    return [
+    `/api/contacts`
+    ] as const;
+    }
+
+
+export const getGetMyContactsQueryOptions = <TData = Awaited<ReturnType<typeof getMyContacts>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyContactsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyContacts>>> = ({ signal }) => getMyContacts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyContacts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyContactsQueryResult = NonNullable<Awaited<ReturnType<typeof getMyContacts>>>
+export type GetMyContactsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List mutually accepted contacts for the signed-in user
+ */
+
+export function useGetMyContacts<TData = Awaited<ReturnType<typeof getMyContacts>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyContactsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getSendFriendRequestUrl = (userId: string,) => {
 
 

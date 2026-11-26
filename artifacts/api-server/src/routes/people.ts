@@ -6,6 +6,7 @@ import {
   DeclineOrCancelFriendRequestParams,
   DeclineOrCancelFriendRequestResponse,
   GetIncomingFriendRequestsResponse,
+  GetMyContactsResponse,
   SendFriendRequestParams,
   SendFriendRequestResponse,
   UpdateMyProfileBody,
@@ -18,6 +19,7 @@ const router: IRouter = Router();
 type ContactUser = Document & {
   id: string;
   friends?: string[];
+  accepted_friends?: string[];
   friend_requests?: string[];
   sent_requests?: string[];
   username?: string;
@@ -88,6 +90,39 @@ router.get("/friend-requests", async (req, res): Promise<void> => {
   })));
 });
 
+router.get("/contacts", async (req, res): Promise<void> => {
+  const userId = readSessionUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Sign-in required." });
+    return;
+  }
+  const db = await getMongoDb();
+  if (!db) {
+    res.status(503).json({ error: "MongoDB unavailable" });
+    return;
+  }
+
+  const currentUser = await db.collection<ContactUser>("users").findOne({ id: userId });
+  const friendIds = Array.isArray(currentUser?.accepted_friends)
+    ? [...new Set(currentUser.accepted_friends.map(String))]
+    : [];
+  const contacts = friendIds.length
+    ? await db.collection<ContactUser>("users")
+      .find({ id: { $in: friendIds }, accepted_friends: userId })
+      .sort({ name: 1 })
+      .toArray()
+    : [];
+
+  res.json(GetMyContactsResponse.parse(contacts.map(contact => {
+    const profile = publicUser(contact)!;
+    return {
+      ...profile,
+      last_seen: profile.last_seen ?? contact.created_at ?? new Date(),
+      created_at: contact.created_at ?? new Date(),
+    };
+  })));
+});
+
 router.post("/friend-requests/:userId", async (req, res): Promise<void> => {
   const userId = readSessionUserId(req);
   if (!userId) {
@@ -112,10 +147,9 @@ router.post("/friend-requests/:userId", async (req, res): Promise<void> => {
     res.status(404).json({ error: "User not found." });
     return;
   }
-  if (
-    (Array.isArray(sender.friends) && sender.friends.includes(params.data.userId)) ||
-    (Array.isArray(recipient.friends) && recipient.friends.includes(userId))
-  ) {
+  const senderHasContact = Array.isArray(sender.accepted_friends) && sender.accepted_friends.includes(params.data.userId);
+  const recipientHasContact = Array.isArray(recipient.accepted_friends) && recipient.accepted_friends.includes(userId);
+  if (senderHasContact && recipientHasContact) {
     res.json(SendFriendRequestResponse.parse({ status: "contact" }));
     return;
   }
@@ -171,6 +205,7 @@ router.post("/friend-requests/:userId/accept", async (req, res): Promise<void> =
       [{
         $set: {
           friends: { $setUnion: [{ $ifNull: ["$friends", []] }, [params.data.userId]] },
+          accepted_friends: { $setUnion: [{ $ifNull: ["$accepted_friends", []] }, [params.data.userId]] },
           friend_requests: withoutEntry("friend_requests", params.data.userId),
         },
       }],
@@ -180,6 +215,7 @@ router.post("/friend-requests/:userId/accept", async (req, res): Promise<void> =
       [{
         $set: {
           friends: { $setUnion: [{ $ifNull: ["$friends", []] }, [userId]] },
+          accepted_friends: { $setUnion: [{ $ifNull: ["$accepted_friends", []] }, [userId]] },
           sent_requests: withoutEntry("sent_requests", userId),
         },
       }],

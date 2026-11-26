@@ -169,6 +169,23 @@ export const GetIncomingFriendRequestsResponse = zod.array(GetIncomingFriendRequ
 
 
 /**
+ * @summary List mutually accepted contacts for the signed-in user
+ */
+export const GetMyContactsResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "username": zod.string(),
+  "profile_picture": zod.string().nullable(),
+  "cover_photo": zod.string().nullable(),
+  "status": zod.string().nullable(),
+  "last_seen": zod.coerce.date(),
+  "is_verified": zod.boolean(),
+  "created_at": zod.coerce.date()
+})
+export const GetMyContactsResponse = zod.array(GetMyContactsResponseItem)
+
+
+/**
  * @summary Send a friend request to a user
  */
 export const SendFriendRequestParams = zod.object({

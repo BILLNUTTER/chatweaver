@@ -35,6 +35,13 @@ export default function SystemNotices() {
         );
         void queryClient.invalidateQueries({ queryKey: getGetMyNotificationsQueryKey() });
       },
+      onError: error => {
+        toast({
+          title: "Could not mark as read",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        });
+      },
     });
   };
 
@@ -79,6 +86,7 @@ export default function SystemNotices() {
               <NoticeCard
                 key={notice.id}
                 notice={notice}
+                isMarkingRead={markRead.isPending}
                 onRead={() => handleRead(notice)}
                 onReply={handleReply}
               />
@@ -92,10 +100,12 @@ export default function SystemNotices() {
 
 function NoticeCard({
   notice,
+  isMarkingRead,
   onRead,
   onReply,
 }: {
   notice: SystemNotification;
+  isMarkingRead: boolean;
   onRead: () => void;
   onReply: (id: string, content: string) => Promise<boolean>;
 }) {
@@ -153,7 +163,7 @@ function NoticeCard({
           {notice.allow_replies && <p className="mt-2 text-[11px] text-[#91a6a3]">Your responses are only visible to you and WhatsChat admins.</p>}
           <div className="mt-4 flex items-center justify-between gap-3 border-t border-[#e8f0ee] pt-3 dark:border-[#294143]">
             <span className="inline-flex items-center gap-1.5 text-xs text-[#829895]" data-testid={`text-notice-date-${notice.id}`}><Clock3 className="h-3.5 w-3.5" />{new Date(notice.created_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span>
-            {!notice.read && <button onClick={onRead} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#128c7e] transition-colors hover:bg-[#edf6f4] dark:hover:bg-[#203334]" data-testid={`button-mark-notice-read-${notice.id}`}><Check className="h-3.5 w-3.5" />Mark as read</button>}
+            {!notice.read && <button onClick={onRead} disabled={isMarkingRead} className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#128c7e] transition-colors hover:bg-[#edf6f4] disabled:cursor-wait disabled:opacity-60 dark:hover:bg-[#203334]" data-testid={`button-mark-notice-read-${notice.id}`}><Check className="h-3.5 w-3.5" />{isMarkingRead ? "Marking…" : "Mark as read"}</button>}
             {notice.read && <span className="inline-flex items-center gap-1 text-xs text-[#91a6a3]" data-testid={`status-notice-read-${notice.id}`}><Check className="h-3.5 w-3.5" />Read</span>}
           </div>
         </div>

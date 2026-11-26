@@ -46,6 +46,7 @@ function profileFromInput(input: Record<string, unknown>, id: string, passwordHa
     status: "Hey there! I am using WhatsChat.",
     last_seen: timestamp,
     friends: [],
+    accepted_friends: [],
     friend_requests: [],
     sent_requests: [],
     created_at: timestamp,

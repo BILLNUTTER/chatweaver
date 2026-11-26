@@ -154,7 +154,7 @@ export default function AdminPage() {
             <button type="submit" disabled={login.isPending} className="w-full rounded-xl bg-[#128c7e] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0d7469] disabled:cursor-wait disabled:opacity-60" data-testid="button-admin-login">
               {login.isPending ? "Signing in…" : "Continue securely"}
             </button>
-            {login.isError && <p className="text-sm text-red-600" role="alert" data-testid="status-admin-login-error">Sign in failed. Please check your details and try again.</p>}
+            {login.isError && <p className="text-sm text-red-600" role="alert" data-testid="status-admin-login-error">{login.error instanceof Error ? login.error.message : "Sign in failed. Please check your details and try again."}</p>}
           </form>
         </section>
       </main>

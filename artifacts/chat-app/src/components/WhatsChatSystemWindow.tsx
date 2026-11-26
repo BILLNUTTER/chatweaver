@@ -33,6 +33,10 @@ export function WhatsChatSystemWindow({ threadId, onBack }: { threadId: string; 
   const thread = (threadsQuery.data ?? []).find(item => item.id === threadId);
 
   useEffect(() => {
+    if (!threadsQuery.isLoading && threadsQuery.data && !thread) onBack();
+  }, [thread, threadsQuery.data, threadsQuery.isLoading, onBack]);
+
+  useEffect(() => {
     if (!threadId) return;
     markRead.mutate({ id: threadId }, {
       onSuccess: () => {

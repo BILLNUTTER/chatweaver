@@ -13,11 +13,11 @@ The Vercel esbuild entry also needs to resolve relative `.js` imports to matchin
 
 Vercel's `functions.<function>.includeFiles` schema expects a single glob string, not an array.
 
-Keep the Vercel API under the Hobby function cap by using the root catch-all for one-segment endpoints and route-family catch-alls for nested endpoints, rather than one function file per endpoint.
+Route all API traffic through one fixed Vercel function and rewrite the original path into a reserved query parameter for Express to restore. Do not rely on route-family `[...path]` files for deeply nested endpoints.
 
-**Why:** The workspace's root catch-all is not a reliable replacement for nested route families, while the per-endpoint wrappers exceeded Hobby's 12-function limit.
+**Why:** Production checks showed route-family catch-alls returned Vercel 404s for deeper profile and admin-login paths even while shallow endpoints worked.
 
-**How to apply:** Count every `.js` file under `api/`; keep the root handler plus a small set of family handlers (auth, users, messages, notifications, admin, and similar) and point them all at the shared Express handler.
+**How to apply:** Keep a single static dispatcher under `api/`, rewrite `/api/:path*` to it, restore `/api/<original path>` before calling Express, and include the generated Express bundle in that function.
 
 User documents stored in MongoDB can contain authentication fields even when legacy client types call the field `password`; every user response must pass through a server-side public projection that removes both `password` and `password_hash`.
 

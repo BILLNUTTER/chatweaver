@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: profiles
     description: Public user profiles
+  - name: people
+    description: Contacts and friend requests
   - name: admin
     description: Protected administrator operations
   - name: notifications
@@ -198,6 +200,26 @@ paths:
                   $ref: "#/components/schemas/PublicProfile"
         "401":
           description: Invalid session
+  /contacts:
+    get:
+      operationId: getMyContacts
+      tags: [people]
+      summary: List mutually accepted contacts for the signed-in user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Contacts where both users accepted the relationship
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PublicProfile"
+        "401":
+          description: Invalid session
+        "503":
+          description: User data is unavailable
   /friend-requests/{userId}:
     post:
       operationId: sendFriendRequest

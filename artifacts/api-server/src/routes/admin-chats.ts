@@ -21,6 +21,7 @@ import { readSessionUserId } from "../lib/session";
 import { verifyAdminToken } from "./admin";
 
 const router: IRouter = Router();
+const chatLifetimeMs = 72 * 60 * 60 * 1000;
 
 function messageShape(message: Document) {
   return {
@@ -272,8 +273,18 @@ router.get("/admin-chats", async (req, res): Promise<void> => {
     res.status(503).json({ error: "MongoDB unavailable" });
     return;
   }
+  const cutoff = new Date(Date.now() - chatLifetimeMs);
+  const cutoffIso = cutoff.toISOString();
   const threads = await db.collection("admin_chat_threads")
-    .find({ recipient_id: userId })
+    .find({
+      recipient_id: userId,
+      $or: [
+        { last_message_at: { $gte: cutoff } },
+        { last_message_at: { $gte: cutoffIso } },
+        { last_message_at: { $exists: false }, created_at: { $gte: cutoff } },
+        { last_message_at: { $exists: false }, created_at: { $gte: cutoffIso } },
+      ],
+    })
     .sort({ last_message_at: -1 })
     .limit(100)
     .toArray();
@@ -304,8 +315,21 @@ router.get("/admin-chats/:id/messages", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Admin chat not found." });
     return;
   }
+  const latestActivity = asDate(thread.last_message_at ?? thread.created_at);
+  if (Date.now() - latestActivity.getTime() >= chatLifetimeMs) {
+    res.status(404).json({ error: "This WhatsChat conversation has expired." });
+    return;
+  }
+  const cutoff = new Date(Date.now() - chatLifetimeMs);
+  const cutoffIso = cutoff.toISOString();
   const messages = await db.collection("admin_chat_messages")
-    .find({ thread_id: params.data.id })
+    .find({
+      thread_id: params.data.id,
+      $or: [
+        { created_at: { $gte: cutoff } },
+        { created_at: { $gte: cutoffIso } },
+      ],
+    })
     .sort({ created_at: 1 })
     .toArray();
   res.json(GetMyAdminChatMessagesResponse.parse(messages.map(messageShape)));

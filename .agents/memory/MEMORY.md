@@ -2,3 +2,4 @@
 - [Mobile chat keyboard layout](mobile-chat-keyboard-layout.md) — size the app to VisualViewport changes and pin the header to the visible viewport.
 - [WhatsChat profile-photo storage](whatschat-profile-photo-storage.md) — uploads are deferred until compatible storage is ready; enforce a 5 MB limit when added.
 - [Admin message privacy](admin-chat-privacy.md) — notification replies are private; WhatsChat system messages are one-way.
+- [Legacy contact consent](legacy-contact-consent.md) — old friend-list entries are not proof of acceptance; existing users must re-confirm.

@@ -80,16 +80,21 @@ router.get("/users", async (req, res) => {
   const ids = typeof req.query.ids === "string" ? req.query.ids.split(",").filter(Boolean) : [];
   const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
   const exclude = typeof req.query.exclude === "string" ? req.query.exclude.split(",").filter(Boolean) : [];
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const filter: Document = {};
   if (ids.length) filter.id = { $in: ids };
   if (exclude.length) filter.id = { ...(filter.id ?? {}), $nin: exclude };
-  if (query.length >= 2) {
+  if (query.length > 0) {
     filter.$or = [
-      { name: { $regex: query, $options: "i" } },
-      { username: { $regex: query, $options: "i" } },
+      { name: { $regex: escapedQuery, $options: "i" } },
+      { username: { $regex: escapedQuery, $options: "i" } },
     ];
   }
-  const users = await db.collection("users").find(filter).sort({ name: 1 }).limit(60).toArray();
+  const users = await db.collection("users")
+    .find(filter)
+    .sort({ name: 1 })
+    .limit(query ? 200 : 60)
+    .toArray();
   return res.json(users.map(publicUser));
 });
 

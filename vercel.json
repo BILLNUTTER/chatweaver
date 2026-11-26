@@ -3,33 +3,15 @@
   "outputDirectory": "artifacts/chat-app/dist/public",
   "installCommand": "pnpm install",
   "functions": {
-    "api/[...path].js": {
-      "includeFiles": "artifacts/api-server/dist/vercel/**"
-    },
-    "api/auth/[...path].js": {
-      "includeFiles": "artifacts/api-server/dist/vercel/**"
-    },
-    "api/users/[...path].js": {
-      "includeFiles": "artifacts/api-server/dist/vercel/**"
-    },
-    "api/conversations/[...path].js": {
-      "includeFiles": "artifacts/api-server/dist/vercel/**"
-    },
-    "api/messages/[...path].js": {
-      "includeFiles": "artifacts/api-server/dist/vercel/**"
-    },
-    "api/friend-requests/[...path].js": {
-      "includeFiles": "artifacts/api-server/dist/vercel/**"
-    },
-    "api/notifications/[...path].js": {
-      "includeFiles": "artifacts/api-server/dist/vercel/**"
-    },
-    "api/admin/[...path].js": {
-      "includeFiles": "artifacts/api-server/dist/vercel/**"
-    },
-    "api/admin-chats/[...path].js": {
+    "api/__dispatch.js": {
       "includeFiles": "artifacts/api-server/dist/vercel/**"
     }
   },
-  "rewrites": [{ "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/api/:path((?!__dispatch(?:/|$)).*)",
+      "destination": "/api/__dispatch?__whatschat_api_route=:path"
+    },
+    { "source": "/((?!api(?:/|$)).*)", "destination": "/index.html" }
+  ]
 }
